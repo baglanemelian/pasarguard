@@ -7,19 +7,19 @@
   </a>
 </p>
 
-<h1 align="center">🛡️ PasarGuard</h1>
+<h1 align="center">🛡️ PasarGuard — Linux VPS Proxy Orchestration Platform</h1>
 
 <p align="center">
-  <strong>Unified, Censorship-Resistant Multi-Node Proxy Orchestration & Management Platform</strong>
+  <strong>High-performance, censorship-resistant multi-node proxy orchestration suite engineered exclusively for Linux production servers (Ubuntu / Debian / AlmaLinux).</strong>
 </p>
 
 <p align="center">
+  <a href="https://github.com/baglanemelian/pasarguard"><img src="https://img.shields.io/badge/OS-Linux%20(Ubuntu%20%7C%20Debian)-E95420?style=for-the-badge&logo=ubuntu&logoColor=white" alt="Linux OS"></a>
   <a href="https://github.com/baglanemelian/pasarguard"><img src="https://img.shields.io/badge/Python-3.14-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.14"></a>
   <a href="https://github.com/baglanemelian/pasarguard"><img src="https://img.shields.io/badge/FastAPI-0.115+-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI"></a>
   <a href="https://github.com/baglanemelian/pasarguard"><img src="https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React 19"></a>
-  <a href="https://github.com/baglanemelian/pasarguard"><img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript"></a>
-  <a href="https://github.com/baglanemelian/pasarguard"><img src="https://img.shields.io/badge/Tailwind_CSS-v4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white" alt="Tailwind CSS"></a>
-  <a href="https://github.com/baglanemelian/pasarguard"><img src="https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker Ready"></a>
+  <a href="https://github.com/baglanemelian/pasarguard"><img src="https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker"></a>
+  <a href="https://github.com/baglanemelian/pasarguard"><img src="https://img.shields.io/badge/Systemd-Service-CC0000?style=for-the-badge&logo=linux&logoColor=white" alt="Systemd"></a>
   <a href="https://github.com/baglanemelian/pasarguard/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License MIT"></a>
 </p>
 
@@ -30,7 +30,7 @@
 </p>
 
 <p align="center">
-  <img src="https://github.com/PasarGuard/PasarGuard.github.io/raw/main/public/logos/screenshot.png" alt="PasarGuard Dashboard Preview" width="900" style="border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.35);">
+  <img src="https://github.com/PasarGuard/PasarGuard.github.io/raw/main/public/logos/screenshot.png" alt="PasarGuard Linux Dashboard Preview" width="900" style="border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.35);">
 </p>
 
 ---
@@ -38,23 +38,24 @@
 ## 📋 Table of Contents
 
 - [📖 Overview](#-overview)
-- [✨ Key Features](#-key-features)
-- [💎 Custom Enhancements in this Fork](#-custom-enhancements-in-this-fork)
-- [⚙️ System Requirements](#️-system-requirements)
-- [🚀 Detailed Installation & Setup Guide](#-detailed-installation--setup-guide)
-  - [Method 1: Production Linux VPS Deployment (Automated Script)](#method-1-production-linux-vps-deployment-automated-script)
-  - [Method 2: Docker & Docker Compose Deployment](#method-2-docker--docker-compose-deployment)
-  - [Method 3: Native Windows Setup (Local Development & Testing)](#method-3-native-windows-setup-local-development--testing)
-  - [Method 4: Manual Linux/Ubuntu Source Installation](#method-4-manual-linuxubuntu-source-installation)
-- [🔑 First-Time Setup & Admin Account Creation](#-first-time-setup--admin-account-creation)
-- [🌐 Service Ports & Access Addresses](#-service-ports--access-addresses)
-- [⚙️ Configuration & Environment Variables (.env)](#️-configuration--environment-variables-env)
-- [🛡️ Advanced Capabilities](#️-advanced-capabilities)
-  - [Concurrent IP Limiter (UUID Security)](#concurrent-ip-limiter-uuid-security)
-  - [Reseller & Sub-Admin User Quota](#reseller--sub-admin-user-quota)
-  - [Telegram Bot & System Alerts](#telegram-bot--system-alerts)
-- [🏗️ System Architecture](#️-system-architecture)
-- [❓ Troubleshooting & FAQ](#-troubleshooting--faq)
+- [✨ Key Capabilities & Protocol Support](#-key-capabilities--protocol-support)
+- [💎 Production Enhancements in this Fork](#-production-enhancements-in-this-fork)
+- [🖥️ Linux VPS Requirements](#️-linux-vps-requirements)
+- [🚀 VPS Installation & Deployment Guide](#-vps-installation--deployment-guide)
+  - [Method 1: One-Line Automated Linux VPS Installer (Recommended)](#method-1-one-line-automated-linux-vps-installer-recommended)
+  - [Method 2: Docker & Docker Compose VPS Deployment](#method-2-docker--docker-compose-vps-deployment)
+  - [Method 3: Manual Source Installation & Systemd Service](#method-3-manual-source-installation--systemd-service)
+- [🔒 Production SSL / TLS Domain Setup (Nginx + Certbot)](#-production-ssl--tls-domain-setup-nginx--certbot)
+- [🔑 First-Time Setup & Admin Account Provisioning](#-first-time-setup--admin-account-provisioning)
+- [🛡️ Advanced Security & Traffic Management](#️-advanced-security--traffic-management)
+  - [Concurrent Multi-IP Limiter (UUID Enforcement)](#concurrent-multi-ip-limiter-uuid-enforcement)
+  - [Reseller & Sub-Admin User Quotas](#reseller--sub-admin-user-quotas)
+  - [Telegram Bot Real-Time Monitoring & Alerts](#telegram-bot-real-time-monitoring--alerts)
+- [🌐 Multi-Node Distributed Architecture](#-multi-node-distributed-architecture)
+- [⚙️ Production Configuration Reference (.env)](#️-production-configuration-reference-env)
+- [⌨️ Linux CLI Command Reference](#️-linux-cli-command-reference)
+- [🛠️ Maintenance, Service Control & Logs](#️-maintenance-service-control--logs)
+- [❓ Troubleshooting & Linux FAQ](#-troubleshooting--linux-faq)
 - [🤝 Contributing](#-contributing)
 - [📄 License](#-license)
 
@@ -62,150 +63,142 @@
 
 ## 📖 Overview
 
-**PasarGuard** is an enterprise-grade, high-performance proxy management panel designed for seamless orchestration of censorship-resistant protocols. Built on top of **FastAPI (Python 3.14)** and **React 19**, PasarGuard enables administrators to manage thousands of active client credentials, distributed multi-core nodes, granular billing metrics, and hardware-bound access limitations from a unified, modern web interface.
+**PasarGuard** is a production-grade, distributed proxy orchestration platform purpose-built for Linux VPS environments. It allows network administrators and service providers to manage, monitor, and scale proxy services across global server clusters through an intuitive web interface and fully automated REST APIs.
 
-Supported cores & protocols:
-- **Xray-core & Sing-box:** VLESS, VMess, Trojan, Shadowsocks, Hysteria 2, TUIC
-- **WireGuard:** Direct peer provisioning and key generation
-- **Security Protocols:** REALITY, Vision, gRPC, WebSocket, TCP, HTTP/2, TLS 1.3
+Designed to operate under aggressive network censorship, PasarGuard coordinates multiple high-speed proxy cores (**Xray-core**, **Sing-box**, and **WireGuard**) while providing strict access limits, real-time client traffic policing, and multi-tenant reseller infrastructure.
 
 ---
 
-## ✨ Key Features
+## ✨ Key Capabilities & Protocol Support
 
 <table>
   <tr>
     <td width="50%">
-      <h3>🔒 Multi-Protocol & Multi-Core</h3>
-      Native support for <b>Xray-core</b>, <b>Sing-box</b>, and <b>WireGuard</b>. Configure single-port multi-inbound fallbacks, TLS, and REALITY camouflage.
+      <h3>🔒 Multi-Core Protocol Support</h3>
+      Native orchestration of <b>Xray-core</b>, <b>Sing-box</b>, and <b>WireGuard</b>. Deploy <code>VLESS</code>, <code>VMess</code>, <code>Trojan</code>, <code>Shadowsocks</code>, <code>Hysteria 2</code>, and <code>TUIC</code>.
     </td>
     <td width="50%">
-      <h3>⚡ Concurrent IP Limit (UUID Level)</h3>
-      Real-time background security engine that inspects active client IP connections per UUID and instantly terminates unauthorized credential sharing.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <h3>👥 Multi-Admin & Reseller Quotas</h3>
-      Granular Role-Based Access Control (RBAC). Assign sub-admins and resellers strict user quotas (<code>max_users</code>) and permission scopes.
-    </td>
-    <td width="50%">
-      <h3>📊 Live Telemetry & Node Health</h3>
-      Sub-second live bandwidth gauges, memory/CPU usage, active connections, node ping status, and historical data usage charts powered by Recharts.
+      <h3>⚡ Real-Time Concurrent IP Limiting</h3>
+      Automated background enforcement that terminates client sessions exceeding their allowed concurrent IP threshold, preventing multi-device link sharing.
     </td>
   </tr>
   <tr>
     <td width="50%">
-      <h3>🔗 Universal Subscription Delivery</h3>
-      Auto-generates subscription links and QR codes compatible with <b>V2rayNG</b>, <b>Clash Meta / Mihomo</b>, <b>Sing-box</b>, <b>Shadowrocket</b>, and <b>Streisand</b>.
+      <h3>👥 Multi-Tenant Reseller Quotas</h3>
+      Granular Role-Based Access Control (RBAC). Allocate strict user creation limits (<code>max_users</code>) to resellers and isolate client records across sub-admins.
+    </td>
+    <td width="50%">
+      <h3>📊 Live Sub-Second Telemetry</h3>
+      Real-time bandwidth throughput, CPU/RAM/Disk metrics, active TCP/UDP connections, node latencies, and historical traffic consumption graphs.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <h3>🔗 Universal Subscription Routing</h3>
+      Generates dynamic client configuration links and QR codes compatible with <b>V2rayNG</b>, <b>Clash Meta / Mihomo</b>, <b>Sing-box</b>, <b>Shadowrocket</b>, and <b>Streisand</b>.
     </td>
     <td width="50%">
       <h3>🤖 Telegram Bot & Webhook Automations</h3>
-      Automated backup dispatch, low balance / traffic expiration warnings, server offline alerts, and subscription renewal notifications.
+      Automated backup dispatch, threshold warnings (80%/100% traffic used), node outage alerts, and subscription renewal notices straight to Telegram.
     </td>
   </tr>
 </table>
 
 ---
 
-## 💎 Custom Enhancements in this Fork
+## 💎 Production Enhancements in this Fork
 
-This repository contains custom production enhancements and bugfixes:
+This repository incorporates mission-critical enhancements for production Linux deployments:
 
-- [x] **Concurrent IP Multi-Device Limiter (`uuid_limit`):** Added database schema migrations, UI inputs in user create/edit dialogs, and a background daemon (`ip_limit_checker.py`) that monitors multi-IP abusers.
-- [x] **Sub-Admin / Reseller Quota Enforcement (`max_users`):** Built-in backend validation preventing resellers from creating more users than their allocated limit.
-- [x] **Full Windows Native Support:** Windows compatibility fixes, pre-configured launcher scripts (`start-all.bat`), and async SQLite database support.
-- [x] **Zero-CORS Vite Reverse Proxy:** Configured single-origin reverse proxy for development, preventing Private Network Access (PNA) blockages.
-
----
-
-## ⚙️ System Requirements
-
-### Production Server (Linux VPS)
-- **OS:** Ubuntu 22.04 LTS / 24.04 LTS or Debian 12 (Recommended)
-- **CPU:** 1 Core minimum (2+ Cores recommended for high traffic)
-- **RAM:** 1 GB minimum (2 GB+ recommended)
-- **Disk:** 10 GB free SSD storage
-- **Network:** Static Public IPv4 / IPv6, ports `80`, `443`, and `8000` accessible
-
-### Local Development (Windows / macOS / Linux)
-- **Python:** 3.12+ (3.14 via `uv` recommended)
-- **Node.js & Runtime:** Node.js 20+ and [Bun](https://bun.sh) (v1.1+)
-- **Package Managers:** `uv` (Fast Python package manager) and `git`
+- [x] **Concurrent IP Multi-Device Limiter (`uuid_limit`):** Integrated database schema migrations, UI inputs in user creation/edit forms, and an active background scanner (`ip_limit_checker.py`) that monitors multi-IP abusers.
+- [x] **Sub-Admin / Reseller Quota Enforcement (`max_users`):** Strict backend quota checks preventing resellers from provisioning users beyond their assigned allowance.
+- [x] **Linux Systemd Service Automations:** Native systemd process management with automatic crash restarts and journal logging (`install_service.sh`).
+- [x] **FastAPI & React 19 Stack Optimization:** Enhanced response latency, optimized database connection pooling, and sub-second metrics aggregation.
 
 ---
 
-## 🚀 Detailed Installation & Setup Guide
+## 🖥️ Linux VPS Requirements
 
-### Method 1: Production Linux VPS Deployment (Automated Script)
+| Specification | Minimum (Single Node) | Recommended (Multi-Node / High Volume) |
+|---|---|---|
+| **Operating System** | Ubuntu 22.04 LTS / Debian 12 | Ubuntu 24.04 LTS / Debian 12 / AlmaLinux 9 |
+| **CPU** | 1 vCPU (x86_64 or ARM64) | 2–4 vCPU |
+| **RAM** | 1 GB RAM | 2 GB – 4 GB RAM |
+| **Disk Storage** | 10 GB SSD | 25 GB+ NVMe SSD |
+| **Network** | 1 Gbps port, Public Static IPv4 | 1 Gbps – 10 Gbps port, Static IPv4 + IPv6 |
+| **Firewall Ports** | `80` (HTTP), `443` (HTTPS), `8000` (Panel API) | Open inbound ports as required by proxy protocols |
 
-The easiest and fastest method to install PasarGuard on a Linux server is using the automated installer.
+---
 
-#### Step 1: Connect to your VPS
+## 🚀 VPS Installation & Deployment Guide
+
+Choose from three distinct deployment strategies depending on your operational preferences:
+
+---
+
+### Method 1: One-Line Automated Linux VPS Installer (Recommended)
+
+The automated script configures system dependencies, prepares the database, builds the environment, and creates a systemd service automatically.
+
+#### Step 1: Connect to your Linux VPS
 ```bash
 ssh root@YOUR_SERVER_IP
 ```
 
-#### Step 2: Update system packages
+#### Step 2: Update System & Install Core Packages
 ```bash
 sudo apt update && sudo apt upgrade -y
 sudo apt install -y curl wget git
 ```
 
-#### Step 3: Run the installer script
-Choose your preferred database backend:
+#### Step 3: Run the Automated Installer
 
-**Option A — SQLite (Best for single-server or small setups):**
+**Option A — SQLite Database (Best for standalone VPS installations):**
 ```bash
 sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install
 ```
 
-**Option B — TimescaleDB / PostgreSQL (Recommended for high volume and multi-node clusters):**
+**Option B — TimescaleDB / PostgreSQL (Recommended for multi-node and high-concurrency clusters):**
 ```bash
 sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database timescaledb
 ```
 
-#### Step 4: Verify the installation & services
+#### Step 4: Verify the Running Service
 ```bash
-# Check service status
 systemctl status pasarguard
-
-# View live service logs
-journalctl -u pasarguard -f
 ```
 
 ---
 
-### Method 2: Docker & Docker Compose Deployment
+### Method 2: Docker & Docker Compose VPS Deployment
 
-Running PasarGuard inside Docker ensures an isolated and predictable environment.
+For containerized deployments with full isolation:
 
-#### Step 1: Install Docker and Docker Compose
+#### Step 1: Install Docker Engine on Linux
 ```bash
 curl -fsSL https://get.docker.com | sh
 sudo systemctl enable --now docker
 ```
 
-#### Step 2: Clone the repository
+#### Step 2: Clone the Repository to `/opt/pasarguard`
 ```bash
 git clone https://github.com/baglanemelian/pasarguard.git /opt/pasarguard
 cd /opt/pasarguard
 ```
 
 #### Step 3: Configure Environment Variables
-Copy the sample environment file and adjust your settings:
 ```bash
 cp .env.example .env
 nano .env
 ```
-*(Make sure to set your secure secret keys, database URL, and domain).*
+*(Verify your `UVICORN_HOST = "0.0.0.0"`, `UVICORN_PORT = 8000`, and set a strong `JWT_SECRET_KEY`).*
 
-#### Step 4: Launch the container
+#### Step 4: Start the Container Stack
 ```bash
 docker compose up -d
 ```
 
-#### Step 5: Check container status & logs
+#### Step 5: Check Container Status & Logs
 ```bash
 docker compose ps
 docker compose logs -f
@@ -213,71 +206,22 @@ docker compose logs -f
 
 ---
 
-### Method 3: Native Windows Setup (Local Development & Testing)
+### Method 3: Manual Source Installation & Systemd Service
 
-You can run PasarGuard natively on Windows without Docker or WSL.
+Deploy directly from source on Ubuntu/Debian using the high-speed `uv` Python package manager:
 
-#### Step 1: Install Required Tools
-Ensure you have the following installed:
-1. **Git:** Download and install from [git-scm.com](https://git-scm.com/)
-2. **uv (Python Package Manager):**
-   Open PowerShell and run:
-   ```powershell
-   powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-   ```
-3. **Bun (JavaScript Runtime & Bundler):**
-   Open PowerShell and run:
-   ```powershell
-   powershell -c "irm bun.sh/install.ps1 | iex"
-   ```
-
-#### Step 2: Clone the Repository
-```powershell
-git clone https://github.com/baglanemelian/pasarguard.git
-cd pasarguard
-```
-
-#### Step 3: Install Backend Dependencies
-```powershell
-# Create virtual environment and sync all dependencies
-uv sync
-```
-
-#### Step 4: Run Database Migrations
-```powershell
-uv run alembic upgrade head
-```
-
-#### Step 5: Install Frontend Dependencies
-```powershell
-cd dashboard
-bun install
-cd ..
-```
-
-#### Step 6: One-Click Launch
-Double-click `start-all.bat` or run:
-```bat
-start-all.bat
-```
-This will launch:
-- **Backend API Server:** `http://127.0.0.1:8000`
-- **Frontend Dev Server (with Hot Module Replacement):** `http://localhost:5173`
-
-*(Individual launchers `run-backend.bat`, `run-frontend-dev.bat`, and `build-frontend.bat` are also available).*
-
----
-
-### Method 4: Manual Linux/Ubuntu Source Installation
-
-#### Step 1: Install Python, uv, and System Dependencies
+#### Step 1: Install Python, uv, Build Tools & Bun
 ```bash
 sudo apt update
-sudo apt install -y python3 python3-pip curl git build-essential
+sudo apt install -y python3 python3-pip curl wget git build-essential
 
-# Install uv package manager
+# Install uv (Fast Python Package Manager)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source ~/.cargo/env
+
+# Install Bun (JavaScript Runtime for Dashboard)
+curl -fsSL https://bun.sh/install | bash
+source ~/.bashrc
 ```
 
 #### Step 2: Clone the Repository
@@ -286,216 +230,294 @@ git clone https://github.com/baglanemelian/pasarguard.git /opt/pasarguard
 cd /opt/pasarguard
 ```
 
-#### Step 3: Set Up Environment & Install Packages
+#### Step 3: Install Python Dependencies & Run Migrations
 ```bash
 cp .env.example .env
 uv sync
 uv run alembic upgrade head
 ```
 
-#### Step 4: Build Frontend Assets
+#### Step 4: Compile Frontend Dashboard Assets
 ```bash
-# Install Bun
-curl -fsSL https://bun.sh/install | bash
-source ~/.bashrc
-
-cd dashboard
-bun install
-bun run build
-cd ..
+chmod +x build_dashboard.sh
+./build_dashboard.sh
 ```
 
-#### Step 5: Run the Server
+#### Step 5: Register and Enable Systemd Service
+Use the provided `install_service.sh` script:
 ```bash
-uv run python main.py
+chmod +x install_service.sh
+sudo ./install_service.sh
+sudo systemctl enable --now pasarguard
+```
+
+Verify service execution:
+```bash
+sudo systemctl status pasarguard
 ```
 
 ---
 
-## 🔑 First-Time Setup & Admin Account Creation
+## 🔒 Production SSL / TLS Domain Setup (Nginx + Certbot)
 
-When you install PasarGuard for the first time, you must create the initial **Owner (Superadmin)** account.
+For security, the administration dashboard should always be served over HTTPS behind an Nginx reverse proxy.
 
-### Step 1: Generate a Temporary Setup Key
-Run the following CLI command inside the project directory:
-
-**On Linux / Docker:**
+### 1. Install Nginx and Certbot
 ```bash
-# Direct Python / uv
-uv run python pasarguard-cli.py generate-temp-key
+sudo apt install -y nginx certbot python3-certbot-nginx
+```
 
-# Or via Docker
+### 2. Configure Nginx Server Block
+Create `/etc/nginx/sites-available/pasarguard`:
+```nginx
+server {
+    server_name panel.yourdomain.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket & Streaming support
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+Enable site:
+```bash
+sudo ln -s /etc/nginx/sites-available/pasarguard /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+### 3. Obtain Free Let's Encrypt SSL Certificate
+```bash
+sudo certbot --nginx -d panel.yourdomain.com
+```
+
+### 4. Configure UFW Firewall
+```bash
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
+```
+
+---
+
+## 🔑 First-Time Setup & Admin Account Provisioning
+
+When you first launch PasarGuard on your Linux VPS, you need to create the primary **Owner (Superadmin)** account.
+
+### Step 1: Generate a One-Time Setup Key via CLI
+
+Run the CLI command on your server:
+
+**Native Linux / Systemd:**
+```bash
+cd /opt/pasarguard
+uv run python pasarguard-cli.py generate-temp-key
+```
+
+**Docker Container:**
+```bash
 docker compose exec pasarguard pasarguard-cli generate-temp-key
 ```
 
-**On Windows:**
-```powershell
-uv run python pasarguard-cli.py generate-temp-key
-```
-
-Output example:
-```
+Output:
+```text
 ==================================================
-  PasarGuard Setup Key:  pg_setup_9f82ab47c1e8
-  Valid for: 15 minutes
+  PasarGuard Setup Key:  pg_setup_7b29a8f4c1e0
+  Expires in: 15 minutes
 ==================================================
 ```
 
-### Step 2: Complete Setup in Browser
+### Step 2: Complete Account Creation in Browser
 1. Open your browser and navigate to:
-   - Development: `http://localhost:5173/login`
-   - Production: `http://YOUR_SERVER_IP:8000/dashboard/`
-2. Click **"Use Setup Key"** or paste the generated key into the prompt.
-3. Define your master **Username** and **Password**.
-4. You are now logged in as the **Owner** with full administrative privileges!
+   ```
+   https://panel.yourdomain.com/dashboard/
+   ```
+   *(or `http://YOUR_SERVER_IP:8000/dashboard/` if accessed directly).*
+2. On the login screen, click **"Setup with Key"** and enter the generated key.
+3. Set your master **Username** and **Password**.
+4. You are immediately logged in as the master **Owner**.
 
 ---
 
-## 🌐 Service Ports & Access Addresses
+## 🛡️ Advanced Security & Traffic Management
 
-| Component | Default Address | Description |
-|---|---|---|
-| **Admin Dashboard (Dev)** | `http://localhost:5173` | Vite development server with instant Hot Module Replacement (HMR) |
-| **Admin Dashboard (Prod)** | `http://127.0.0.1:8000/dashboard/` | Compiled production dashboard served by FastAPI |
-| **Interactive API Documentation** | `http://127.0.0.1:8000/docs` | Swagger UI with live API testing endpoints |
-| **OpenAPI Specification** | `http://127.0.0.1:8000/openapi.json` | Raw OpenAPI JSON schema definition |
-| **Client Subscriptions** | `http://127.0.0.1:8000/sub/{token}` | Dynamic subscription endpoint for V2ray/Clash/Sing-box clients |
+### Concurrent Multi-IP Limiter (UUID Enforcement)
+Prevent clients from sharing subscriptions across multiple unauthorized devices:
+1. Go to **Users** ➔ Click **Create User** (or Edit).
+2. Under the **IP Limit** field, specify the maximum number of concurrent IP addresses allowed (e.g., `1` for single-device, `2` for dual-device).
+3. The background inspection worker automatically queries active proxy core sessions, isolates duplicate IP addresses connecting with the same UUID, and revokes access for violators.
 
----
-
-## ⚙️ Configuration & Environment Variables (.env)
-
-The `.env` file at the root of the project controls core behaviors:
-
-```ini
-## Server Binding
-UVICORN_HOST = "0.0.0.0"       # Set to 127.0.0.1 for local/reverse-proxy setups
-UVICORN_PORT = 8000            # Port for FastAPI application
-
-## Application Role
-ROLE = "all-in-one"            # Options: 'all-in-one', 'master', 'node'
-
-## Debugging & Documentation
-DEBUG = False                  # Set to True for verbose tracebacks
-DOCS = True                    # Enable/Disable /docs and /redoc endpoints
-
-## Database Connection
-# SQLite:
-SQLALCHEMY_DATABASE_URL = "sqlite+aiosqlite:///db.sqlite3"
-# PostgreSQL:
-# SQLALCHEMY_DATABASE_URL = "postgresql+asyncpg://user:pass@localhost:5432/pasarguard"
-
-## Security & Authentication
-JWT_SECRET_KEY = "generate-a-strong-random-string-here"
-ACCESS_TOKEN_EXPIRE_MINUTES = 1440
-
-## CORS Configuration
-ALLOWED_ORIGINS = "*"
-
-## Telegram Bot Integration (Optional)
-TELEGRAM_BOT_TOKEN = ""
-TELEGRAM_ADMIN_CHAT_ID = ""
-```
-
----
-
-## 🛡️ Advanced Capabilities
-
-### Concurrent IP Limiter (UUID Security)
-Prevent credential sharing and multi-device abuse on subscription links:
-1. Navigate to **Users** ➔ Click **Create User** (or Edit existing).
-2. Set the **IP Limit** field (e.g., `1` for single device, `2` for dual device).
-3. The background monitor automatically detects active IPs across inbounds and temporarily restricts access when the threshold is exceeded.
-
-### Reseller & Sub-Admin User Quota
-Scale your proxy infrastructure with delegated resellers:
+### Reseller & Sub-Admin User Quotas
+Scale your infrastructure across delegated resellers:
 1. Navigate to **Admins** ➔ **Create Admin**.
 2. Assign the **Reseller** role.
-3. Configure the **User Quota (`max_users`)** (e.g., `50`).
-4. The reseller can create, manage, and monitor their own users up to their assigned limit without seeing users belonging to other resellers or the master administrator.
+3. Configure the **User Limit (`max_users`)** (e.g., `100`).
+4. The reseller can log into the dashboard, create users, and inspect their traffic up to their allotted quota, with zero access to system settings or other admins' users.
 
-### Telegram Bot & System Alerts
-Receive real-time mission-critical alerts:
-- **Node Status:** Instant notifications when a proxy node loses connectivity.
-- **Traffic Warnings:** Client notifications when 80% and 100% of data limits are reached.
-- **Automated Backups:** Daily encrypted database backups sent straight to your private Telegram chat.
+### Telegram Bot Real-Time Monitoring & Alerts
+1. Open **Settings** ➔ **Telegram**.
+2. Enter your `Telegram Bot Token` and `Admin Chat ID`.
+3. Receive automated alerts for:
+   - Node offline / disconnect warnings
+   - High server resource usage (CPU/RAM spikes)
+   - Automated daily database backups (.sqlite / sql dump)
+   - User traffic expiration warnings
 
 ---
 
-## 🏗️ System Architecture
+## 🌐 Multi-Node Distributed Architecture
+
+PasarGuard operates seamlessly with distributed edge nodes located in different regions:
 
 ```mermaid
 graph TD
-    User([End User / Proxy Client]) -->|VLESS / VMess / WireGuard| Node[Proxy Edge Node]
-    Admin([Administrator / Reseller]) -->|HTTPS / Dashboard UI| Gateway[Nginx / Reverse Proxy]
-    
-    Gateway -->|Port 8000| Core[PasarGuard FastAPI Core]
-    
-    subgraph Core Services
-        Core --> Auth[RBAC & JWT Auth]
-        Core --> IPLimiter[UUID Concurrent IP Inspector]
-        Core --> Scheduler[APScheduler Background Jobs]
-        Core --> DB[(Database: SQLite / PostgreSQL)]
+    Client[Proxy Client] -->|VLESS / VMess / WireGuard| EdgeNode[Edge Node - Germany / US / SG]
+    Admin[Administrator] -->|HTTPS / SSL| MasterVPS[Master Panel VPS]
+
+    subgraph Master VPS Services
+        MasterVPS --> API[FastAPI :8000]
+        MasterVPS --> DB[(PostgreSQL / SQLite)]
+        MasterVPS --> Worker[IP Limit Daemon & APScheduler]
     end
-    
-    subgraph Distributed Nodes
-        Core -->|gRPC / REST API| MasterNode[Master Xray Node]
-        Core -->|TLS / SSH| EdgeNode1[Sing-box Edge Node]
-        Core -->|WireGuard Protocol| EdgeNode2[WireGuard Endpoint]
+
+    subgraph Distributed Proxy Nodes
+        API -->|gRPC / REST / TLS| Node1[Xray-core Inbounds]
+        API -->|SSH / NATS| Node2[Sing-box Inbounds]
+        API -->|Kernel API| Node3[WireGuard Endpoint]
     end
+```
+
+To add an Edge Node:
+1. Open **Nodes** ➔ **Add Node**.
+2. Enter the remote server IP, port, and security token.
+3. The master panel automatically deploys configurations and aggregates traffic statistics in real-time.
+
+---
+
+## ⚙️ Production Configuration Reference (.env)
+
+| Variable | Default Value | Description |
+|---|---|---|
+| `UVICORN_HOST` | `0.0.0.0` | Network interface to bind (use `127.0.0.1` behind reverse proxy) |
+| `UVICORN_PORT` | `8000` | Application listening port |
+| `ROLE` | `all-in-one` | Server role: `all-in-one`, `master`, or `node` |
+| `DEBUG` | `False` | Set `False` in production to prevent stack traces |
+| `DOCS` | `True` | Exposes interactive Swagger documentation at `/docs` |
+| `SQLALCHEMY_DATABASE_URL` | `sqlite+aiosqlite:///db.sqlite3` | Database connection string (SQLite, PostgreSQL, TimescaleDB) |
+| `JWT_SECRET_KEY` | *(Random String)* | Secret key used for signing administrative JWT tokens |
+| `ACCESS_TOKEN_EXPIRE_MINUTES`| `1440` | Admin token lifetime in minutes (24 hours) |
+| `ALLOWED_ORIGINS` | `*` | Allowed CORS origins (lock down to your domain in production) |
+| `DASHBOARD_PATH` | `/dashboard/` | URL subpath where the web dashboard is served |
+
+---
+
+## ⌨️ Linux CLI Command Reference
+
+Execute management tasks directly from the Linux terminal:
+
+```bash
+# Generate temporary setup key for owner account
+python pasarguard-cli.py generate-temp-key
+
+# Check installed PasarGuard version
+python pasarguard-cli.py version
+
+# Run pending database migrations
+uv run alembic upgrade head
+
+# Rebuild frontend dashboard
+./build_dashboard.sh
 ```
 
 ---
 
-## ❓ Troubleshooting & FAQ
+## 🛠️ Maintenance, Service Control & Logs
+
+Manage the systemd background daemon on Linux:
+
+```bash
+# Start service
+sudo systemctl start pasarguard
+
+# Stop service
+sudo systemctl stop pasarguard
+
+# Restart service
+sudo systemctl restart pasarguard
+
+# View service status
+sudo systemctl status pasarguard
+
+# Follow live service logs in real time
+sudo journalctl -u pasarguard -f
+
+# View last 100 log entries
+sudo journalctl -u pasarguard -n 100 --no-pager
+```
+
+---
+
+## ❓ Troubleshooting & Linux FAQ
 
 <details>
-<summary><b>1. Port 8000 or 5173 is already in use</b></summary>
-If another service is using port 8000 or 5173:
-- In `.env`, change `UVICORN_PORT = 8001`.
-- For the frontend, run `bun run dev --port 5174`.
+<summary><b>1. Port 8000 is already occupied by another service</b></summary>
+Find which process is using port 8000:
+```bash
+sudo ss -tulpn | grep :8000
+```
+Change `UVICORN_PORT = 8080` in `/opt/pasarguard/.env` and restart:
+```bash
+sudo systemctl restart pasarguard
+```
 </details>
 
 <details>
-<summary><b>2. Database schema is out of date / Migration errors</b></summary>
-Run the database migrations:
+<summary><b>2. Database schema migration issues</b></summary>
+Apply any pending database migrations manually:
 ```bash
+cd /opt/pasarguard
 uv run alembic upgrade head
 ```
 </details>
 
 <details>
-<summary><b>3. Cannot access dashboard from external IP</b></summary>
-Ensure your firewall allows incoming traffic on port 8000:
+<summary><b>3. Firewall is blocking access to dashboard</b></summary>
+Allow traffic on port 8000 through the UFW firewall:
 ```bash
 sudo ufw allow 8000/tcp
+sudo ufw reload
 ```
-Make sure `UVICORN_HOST = "0.0.0.0"` in `.env`.
 </details>
 
 <details>
-<summary><b>4. How to reset admin password?</b></summary>
-Generate a new setup key via CLI:
+<summary><b>4. How to reset a forgotten admin password?</b></summary>
+Generate a new one-time setup key via the server CLI:
 ```bash
+cd /opt/pasarguard
 uv run python pasarguard-cli.py generate-temp-key
 ```
-Use the key on the login page to reset credentials.
+Open `https://panel.yourdomain.com/dashboard/` and reset your credentials using the key.
 </details>
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are warmly welcomed! To contribute:
-1. Fork this repository.
-2. Create a feature branch: `git checkout -b feature/amazing-feature`.
-3. Commit your changes: `git commit -m 'feat: add amazing feature'`.
-4. Push to your branch: `git push origin feature/amazing-feature`.
-5. Open a **Pull Request**.
+Contributions, bug reports, and pull requests are welcomed!  
+Please open issues on [GitHub Issues](https://github.com/baglanemelian/pasarguard/issues).
 
 ---
 
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).  
-Developed with ❤️ for censorship-free, open, and secure internet access.
+Engineered for open, uncensored, and secure global communication.

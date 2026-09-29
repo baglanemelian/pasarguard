@@ -31,6 +31,9 @@ panel/dashboard/.env
 .DS_Store
 Thumbs.db
 *Zone.Identifier
+*.bat
+*.cmd
+*.ps1
 
 # Build / Binaries
 v2ray-core/
