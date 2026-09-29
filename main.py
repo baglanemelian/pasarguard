@@ -120,26 +120,11 @@ if __name__ == "__main__":
         if server_settings.uds:
             bind_args["uds"] = server_settings.uds
         else:
-            ip = check_and_modify_ip(server_settings.host)
-
-            logger.warning(f"""
-{click.style("IMPORTANT!", blink=True, bold=True, fg="yellow")}
-You're running PasarGuard without specifying {click.style("UVICORN_SSL_CERTFILE", italic=True, fg="magenta")} and {click.style("UVICORN_SSL_KEYFILE", italic=True, fg="magenta")}.
-The application will only be accessible through localhost. This means that {click.style("PasarGuard and subscription URLs will not be accessible externally", bold=True)}.
-
-If you need external access, please provide the SSL files to allow the server to bind to 0.0.0.0. Alternatively, you can run the server on localhost or a Unix socket and use a reverse proxy, such as Nginx or Caddy, to handle SSL termination and provide external access.
-
-If you wish to continue without SSL, you can use SSH port forwarding to access the application from your machine. note that in this case, subscription functionality will not work.
-
-Use the following command:
-
-{click.style(f"ssh -L {server_settings.port}:localhost:{server_settings.port} user@server", italic=True, fg="cyan")}
-
-Then, navigate to {click.style(f"http://{ip}:{server_settings.port}", bold=True)} on your computer.
-            """)
-
-            bind_args["host"] = ip
+            bind_args["host"] = server_settings.host
             bind_args["port"] = server_settings.port
+
+            if not (server_settings.ssl_certfile and server_settings.ssl_keyfile):
+                logger.info(f"Running without SSL. Server bound to {server_settings.host}:{server_settings.port}")
 
     if runtime_settings.debug:
         bind_args["uds"] = None
