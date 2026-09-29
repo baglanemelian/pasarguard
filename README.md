@@ -136,37 +136,46 @@ Choose from three distinct deployment strategies depending on your operational p
 
 ---
 
-### Method 1: One-Line Automated Linux VPS Installer (Recommended)
+### Method 1: One-Line Automated Installer (Recommended)
 
-The automated script configures system dependencies, prepares the database, builds the environment, and creates a systemd service automatically.
+A single command that handles **everything** — installs all system dependencies (`uv`, `bun`, `git`), clones the repository, installs Python & JavaScript packages, runs database migrations, compiles the frontend dashboard, registers a `systemd` service, opens the firewall, and generates your first admin setup key.
 
 #### Step 1: Connect to your Linux VPS
 ```bash
 ssh root@YOUR_SERVER_IP
 ```
 
-#### Step 2: Update System & Install Core Packages
+#### Step 2: Run One Single Command
 ```bash
-sudo apt update && sudo apt upgrade -y
-sudo apt install -y curl wget git
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/baglanemelian/pasarguard/main/install.sh)"
 ```
 
-#### Step 3: Run the Automated Installer
+> **That's it.** After ~2–3 minutes, the installer will print your panel URL and admin setup key:
 
-**Option A — SQLite Database (Best for standalone VPS installations):**
-```bash
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install
+```text
+================================================================
+      PASARGUARD INSTALLATION COMPLETED SUCCESSFULLY!
+================================================================
+Access your panel dashboard:
+  👉  http://YOUR_SERVER_IP:8000/dashboard/
+  👉  http://YOUR_SERVER_IP:8000/docs (Swagger REST API)
+
+Administrator Setup Key:
+  pg_setup_7b29a8f4c1e0   (valid for 15 minutes)
+
+Service Management Commands:
+  - Status:   sudo systemctl status pasarguard
+  - Restart:  sudo systemctl restart pasarguard
+  - Logs:     sudo journalctl -u pasarguard -f
+================================================================
 ```
 
-**Option B — TimescaleDB / PostgreSQL (Recommended for multi-node and high-concurrency clusters):**
-```bash
-sudo bash -c "$(curl -fsSL https://github.com/PasarGuard/scripts/raw/main/pasarguard.sh)" @ install --database timescaledb
-```
-
-#### Step 4: Verify the Running Service
+#### Step 3: Verify the Running Service
 ```bash
 systemctl status pasarguard
 ```
+
+> 💡 **Updating to latest version?** Simply run the same command again — it will pull the latest code, re-run migrations, rebuild the dashboard, and restart the service automatically.
 
 ---
 
