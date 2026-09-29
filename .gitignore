@@ -16,6 +16,9 @@ ENV/
 node_modules/
 .npm
 .eslintcache
+dashboard/build/
+dashboard/dist/
+dashboard/.env
 
 # Environment / Secret files
 .env

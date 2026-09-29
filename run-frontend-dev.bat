@@ -1,10 +1,7 @@
 @echo off
-title PasarGuard Dashboard (Hot Reload Dev)
-cd /d "%~dp0panel\dashboard"
 echo ==============================================
-echo   PasarGuard Frontend Canli Gelistirme Baslatiliyor...
-echo   Adres: http://localhost:5173
-echo   Kod degisiklikleri aninda ekrana yansiyacaktir.
+echo   PasarGuard Frontend Dev Server (Port 5173)...
 echo ==============================================
+cd /d %~dp0dashboard
 bun run dev
 pause

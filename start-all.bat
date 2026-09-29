@@ -2,9 +2,9 @@
 echo ==============================================
 echo   PasarGuard Tum Servisleri Baslatiliyor...
 echo ==============================================
-start "PasarGuard Backend" cmd /k "cd /d %~dp0panel && uv run python main.py"
+start "PasarGuard Backend" cmd /k "cd /d %~dp0 && uv run python main.py"
 timeout /t 3 /nobreak >nul
-start "PasarGuard Frontend Dev" cmd /k "cd /d %~dp0panel\dashboard && bun run dev"
+start "PasarGuard Frontend Dev" cmd /k "cd /d %~dp0dashboard && bun run dev"
 echo Servisler baslatildi!
 echo Tarayicinizda su adresleri acabilirsiniz:
 echo - Gelistirme Arayuzu (Hot Reload): http://localhost:5173
