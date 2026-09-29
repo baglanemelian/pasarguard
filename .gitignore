@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+*.sqlite3*
+*.sqlite3-journal
+*.db
+*.log
+
+# Node / Frontend
+node_modules/
+.npm
+.eslintcache
+
+# Environment / Secret files
+.env
+panel/.env
+panel/dashboard/.env
+
+# IDE & OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*Zone.Identifier
+
+# Build / Binaries
+v2ray-core/
+xray-core/
