@@ -32,42 +32,52 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# 2. Update package index and install prerequisites
+# 2. Update package index and install prerequisites (including unzip and tar)
 echo -e "${YELLOW}[1/7] Updating system packages & installing core dependencies...${NC}"
 if command -v apt-get &>/dev/null; then
     apt-get update -y
-    apt-get install -y curl wget git build-essential python3 python3-pip ca-certificates
+    apt-get install -y curl wget git build-essential python3 python3-pip ca-certificates unzip tar
 elif command -v dnf &>/dev/null; then
     dnf update -y
-    dnf install -y curl wget git gcc gcc-c++ make python3 python3-pip ca-certificates
+    dnf install -y curl wget git gcc gcc-c++ make python3 python3-pip ca-certificates unzip tar
 elif command -v yum &>/dev/null; then
     yum update -y
-    yum install -y curl wget git gcc gcc-c++ make python3 python3-pip ca-certificates
+    yum install -y curl wget git gcc gcc-c++ make python3 python3-pip ca-certificates unzip tar
 fi
 
 # 3. Install uv (Fast Python Package Manager) if missing
 echo -e "${YELLOW}[2/7] Checking and installing uv Python package manager...${NC}"
 if ! command -v uv &>/dev/null; then
     curl -LsSf https://astral.sh/uv/install.sh | sh
-    export PATH="$HOME/.cargo/bin:$PATH"
-    if [ -f "$HOME/.cargo/env" ]; then
-        source "$HOME/.cargo/env"
-    fi
+fi
+
+# Add uv to PATH and symlink to /usr/local/bin for global access
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+if [ -f "$HOME/.local/bin/uv" ]; then
+    ln -sf "$HOME/.local/bin/uv" /usr/local/bin/uv
+    ln -sf "$HOME/.local/bin/uvx" /usr/local/bin/uvx 2>/dev/null || true
+elif [ -f "$HOME/.cargo/bin/uv" ]; then
+    ln -sf "$HOME/.cargo/bin/uv" /usr/local/bin/uv
+    ln -sf "$HOME/.cargo/bin/uvx" /usr/local/bin/uvx 2>/dev/null || true
 fi
 
 # 4. Install Bun (JavaScript runtime for dashboard) if missing
 echo -e "${YELLOW}[3/7] Checking and installing Bun runtime...${NC}"
 if ! command -v bun &>/dev/null; then
     curl -fsSL https://bun.sh/install | bash
-    export BUN_INSTALL="$HOME/.bun"
-    export PATH="$BUN_INSTALL/bin:$PATH"
-    if [ -f "$HOME/.bashrc" ]; then
-        source "$HOME/.bashrc"
-    fi
 fi
 
-# Ensure binaries are available in PATH
-export PATH="$HOME/.cargo/bin:$HOME/.bun/bin:/usr/local/bin:$PATH"
+# Add Bun to PATH and symlink to /usr/local/bin for global access
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+if [ -f "$HOME/.bun/bin/bun" ]; then
+    ln -sf "$HOME/.bun/bin/bun" /usr/local/bin/bun
+fi
+
+# Verify tools
+export PATH="/usr/local/bin:$HOME/.local/bin:$HOME/.bun/bin:$PATH"
+echo -e "${GREEN}[✓] uv version:  $(uv --version)${NC}"
+echo -e "${GREEN}[✓] bun version: $(bun --version)${NC}"
 
 # 5. Clone or update repository in /opt/pasarguard
 echo -e "${YELLOW}[4/7] Deploying PasarGuard source code into ${INSTALL_DIR}...${NC}"
@@ -86,7 +96,6 @@ fi
 echo -e "${YELLOW}[5/7] Configuring environment variables...${NC}"
 if [ ! -f "$INSTALL_DIR/.env" ]; then
     cp "$INSTALL_DIR/.env.example" "$INSTALL_DIR/.env"
-    # Generate random JWT secret
     RANDOM_SECRET=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
     sed -i "s/JWT_SECRET_KEY = .*/JWT_SECRET_KEY = \"${RANDOM_SECRET}\"/" "$INSTALL_DIR/.env"
     sed -i 's/UVICORN_HOST = .*/UVICORN_HOST = "0.0.0.0"/' "$INSTALL_DIR/.env"
@@ -119,6 +128,7 @@ After=network.target nss-lookup.target
 Type=simple
 User=root
 WorkingDirectory=${INSTALL_DIR}
+Environment="PATH=${INSTALL_DIR}/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 ExecStart=${INSTALL_DIR}/.venv/bin/python3 ${INSTALL_DIR}/main.py
 Restart=always
 RestartSec=5
