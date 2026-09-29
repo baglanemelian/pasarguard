@@ -4,6 +4,7 @@ import { formatBytes } from '@/utils/formatByte'
 import { useTranslation } from 'react-i18next'
 import { Progress } from '@/components/ui/progress'
 import useDirDetection from '@/hooks/use-dir-detection'
+import { UserLiveOnlineCount } from '@/components/common/user-live-online-count'
 
 type UsageSliderProps = {
   used: number
@@ -11,14 +12,25 @@ type UsageSliderProps = {
   totalUsedTraffic: number | undefined
   status: string
   isMobile?: boolean
+  userId?: number
+  uuidLimit?: number | null
 }
 
-const UsageSliderCompact: React.FC<UsageSliderProps> = ({ used, total = 0, status, totalUsedTraffic, isMobile }) => {
+const UsageSliderCompact: React.FC<UsageSliderProps> = ({
+  used,
+  total = 0,
+  status,
+  totalUsedTraffic,
+  isMobile,
+  userId,
+  uuidLimit,
+}) => {
   const isUnlimited = total === 0 || total === null
   const progressValue = isUnlimited ? 100 : (used / total) * 100
   const color = statusColors[status]?.sliderColor
   const { t } = useTranslation()
   const isRTL = useDirDetection() === 'rtl'
+
   return (
     <div className={cn('text-muted-foreground flex w-full flex-col justify-between gap-y-1 text-left text-xs font-medium', isRTL ? 'md:text-end' : 'md:text-start')}>
       <Progress indicatorClassName={color} value={progressValue} className={cn(isMobile ? 'block' : 'hidden md:block')} />
@@ -26,8 +38,9 @@ const UsageSliderCompact: React.FC<UsageSliderProps> = ({ used, total = 0, statu
         <span className={cn(isMobile ? 'hidden' : 'w-full', 'leading-tight')} dir="ltr">
           {formatBytes(used)} / {isUnlimited ? <span className="font-system-ui">∞</span> : formatBytes(total)}
         </span>
-        <div className={cn(isMobile ? 'block' : 'hidden md:block', 'leading-tight')}>
+        <div className={cn(isMobile ? 'flex items-center gap-1.5' : 'hidden md:flex md:items-center md:gap-1.5', 'leading-tight')}>
           <span>{t('usersTable.total')}:</span> <span dir="ltr">{formatBytes(totalUsedTraffic || 0)}</span>
+          <UserLiveOnlineCount userId={userId} uuidLimit={uuidLimit} />
         </div>
       </div>
     </div>

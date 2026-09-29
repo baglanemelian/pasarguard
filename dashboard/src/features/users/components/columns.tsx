@@ -137,11 +137,6 @@ export const setupColumns = ({
             <div className="flex min-w-0 flex-1 flex-col gap-y-0.5 overflow-hidden text-ellipsis whitespace-nowrap">
               <div className="flex items-center gap-x-1.5 overflow-hidden">
                 <span className="overflow-hidden text-sm font-medium text-ellipsis whitespace-nowrap">{row.getValue('username')}</span>
-                {(row.original as any).uuid_limit ? (
-                  <span className="rounded bg-primary/10 border border-primary/20 px-1 py-0.2 text-[10px] text-primary font-mono shrink-0" title={t('userDialog.uuidLimit', { defaultValue: 'IP Limit' })}>
-                    ⚡ IP: {(row.original as any).uuid_limit}
-                  </span>
-                ) : null}
                 <span className="text-muted-foreground/70 hidden shrink-0 font-mono text-[10px] md:inline">#{row.original.id}</span>
                 {onlineTimeText && <span className="text-muted-foreground hidden shrink-0 text-[10px] font-normal md:inline">{onlineTimeText}</span>}
               </div>
@@ -233,7 +228,14 @@ export const setupColumns = ({
     },
     cell: ({ row }: { row: Row<UserResponse> }) => (
       <div className="flex items-center justify-between gap-1 py-1">
-        <UsageSliderCompact total={row.original.data_limit} used={row.original.used_traffic} totalUsedTraffic={row.original.lifetime_used_traffic} status={row.original.status} />
+        <UsageSliderCompact
+          total={row.original.data_limit}
+          used={row.original.used_traffic}
+          totalUsedTraffic={row.original.lifetime_used_traffic}
+          status={row.original.status}
+          userId={row.original.id}
+          uuidLimit={(row.original as any).uuid_limit}
+        />
         <div className="hidden w-[215px] px-2 py-1 md:block">
           <ActionButtons user={row.original} isModalHost={false} />
         </div>
