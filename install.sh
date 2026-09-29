@@ -142,7 +142,12 @@ systemctl daemon-reload
 systemctl enable pasarguard
 systemctl restart pasarguard
 
-# 10. Open firewall port if ufw is active
+# 10. Install global 'pasarguard' CLI command
+echo -e "${YELLOW}[+] Installing 'pasarguard' command to /usr/local/bin/pasarguard...${NC}"
+cp -f "${INSTALL_DIR}/pasarguard.sh" /usr/local/bin/pasarguard
+chmod +x /usr/local/bin/pasarguard
+
+# 11. Open firewall port if ufw is active
 if command -v ufw &>/dev/null && ufw status | grep -q "Status: active"; then
     echo -e "${CYAN}[+] Opening firewall port 8000/tcp...${NC}"
     ufw allow 8000/tcp || true
@@ -151,7 +156,7 @@ fi
 # Wait for server to warm up
 sleep 3
 
-# 11. Generate setup key for owner account
+# 12. Generate setup key for owner account
 echo -e "\n${CYAN}[+] Generating one-time administrator setup key...${NC}"
 TEMP_KEY=$(cd "$INSTALL_DIR" && uv run python pasarguard-cli.py generate-temp-key 2>&1 || true)
 
@@ -168,8 +173,10 @@ echo ""
 echo -e "${CYAN}Administrator Setup Key:${NC}"
 echo -e "${TEMP_KEY}"
 echo ""
-echo -e "${CYAN}Service Management Commands:${NC}"
-echo -e "  - Status:   ${YELLOW}sudo systemctl status pasarguard${NC}"
-echo -e "  - Restart:  ${YELLOW}sudo systemctl restart pasarguard${NC}"
-echo -e "  - Logs:     ${YELLOW}sudo journalctl -u pasarguard -f${NC}"
+echo -e "${CYAN}PasarGuard Management Commands:${NC}"
+echo -e "  - Status:   ${YELLOW}pasarguard status${NC}"
+echo -e "  - Restart:  ${YELLOW}pasarguard restart${NC}"
+echo -e "  - Logs:     ${YELLOW}pasarguard logs${NC}"
+echo -e "  - New Key:  ${YELLOW}pasarguard key${NC}"
+echo -e "  - Help:     ${YELLOW}pasarguard${NC}"
 echo -e "${GREEN}================================================================${NC}\n"
