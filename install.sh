@@ -92,13 +92,48 @@ else
     cd "$INSTALL_DIR"
 fi
 
+# Parse database option (default: sqlite, supported: timescaledb / sqlite)
+DATABASE_TYPE="sqlite"
+for arg in "$@"; do
+    if [[ "$arg" == *"timescale"* ]]; then
+        DATABASE_TYPE="timescaledb"
+    fi
+done
+
 # 6. Configure environment (.env)
-echo -e "${YELLOW}[5/7] Configuring environment variables...${NC}"
+echo -e "${YELLOW}[5/7] Configuring environment variables (Database: ${DATABASE_TYPE})...${NC}"
 if [ ! -f "$INSTALL_DIR/.env" ]; then
     cp "$INSTALL_DIR/.env.example" "$INSTALL_DIR/.env"
     RANDOM_SECRET=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
     sed -i "s/JWT_SECRET_KEY = .*/JWT_SECRET_KEY = \"${RANDOM_SECRET}\"/" "$INSTALL_DIR/.env"
     sed -i 's/UVICORN_HOST = .*/UVICORN_HOST = "0.0.0.0"/' "$INSTALL_DIR/.env"
+fi
+
+if [ "$DATABASE_TYPE" = "timescaledb" ]; then
+    echo -e "${YELLOW}[+] Deploying TimescaleDB container (PostgreSQL + TimescaleDB)...${NC}"
+    if ! command -v docker &>/dev/null; then
+        echo -e "${CYAN}[+] Installing Docker...${NC}"
+        curl -fsSL https://get.docker.com | sh
+        systemctl enable --now docker
+    fi
+
+    DB_PASS=$(head -c 24 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 20)
+    mkdir -p /var/lib/pasarguard/timescaledb
+
+    if ! docker ps -a --format '{{.Names}}' | grep -q "^pasarguard-timescaledb$"; then
+        docker run -d \
+            --name pasarguard-timescaledb \
+            --restart always \
+            -p 127.0.0.1:5432:5432 \
+            -e POSTGRES_PASSWORD="${DB_PASS}" \
+            -e POSTGRES_DB=pasarguard \
+            -v /var/lib/pasarguard/timescaledb:/var/lib/postgresql/data \
+            timescale/timescaledb:latest-pg16
+        echo -e "${CYAN}[+] Waiting for TimescaleDB to initialize...${NC}"
+        sleep 6
+    fi
+
+    sed -i "s|SQLALCHEMY_DATABASE_URL = .*|SQLALCHEMY_DATABASE_URL = \"postgresql+asyncpg://postgres:${DB_PASS}@127.0.0.1:5432/pasarguard\"|" "$INSTALL_DIR/.env"
 fi
 
 # 7. Install Python dependencies and run database migrations
