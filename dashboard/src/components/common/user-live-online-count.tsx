@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useEffect, useRef, useState } from 'react'
 import { useUserOnlineIpListAllNodes } from '@/service/api'
 
 interface UserLiveOnlineCountProps {
@@ -11,8 +11,11 @@ export const UserLiveOnlineCount: React.FC<UserLiveOnlineCountProps> = ({ userId
 
   const { data } = useUserOnlineIpListAllNodes(userId, {
     query: {
-      refetchInterval: 2000, // Real-time 2-second polling as requested
-      staleTime: 1500,
+      refetchInterval: 800, // Sub-second 800ms for instantaneous updates
+      staleTime: 0,
+      gcTime: 0,
+      refetchIntervalInBackground: true,
+      refetchOnWindowFocus: 'always',
       enabled: !!userId,
     },
   })
@@ -28,19 +31,35 @@ export const UserLiveOnlineCount: React.FC<UserLiveOnlineCountProps> = ({ userId
     return ips.size
   }, [data])
 
+  const [justChanged, setJustChanged] = useState(false)
+  const prevCountRef = useRef(onlineCount)
+
+  useEffect(() => {
+    if (prevCountRef.current !== onlineCount) {
+      setJustChanged(true)
+      const timer = setTimeout(() => setJustChanged(false), 1200)
+      prevCountRef.current = onlineCount
+      return () => clearTimeout(timer)
+    }
+  }, [onlineCount])
+
   const isOnline = onlineCount > 0
 
   return (
     <span
       className={
         isOnline
-          ? 'inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 text-[10px] font-mono font-medium text-emerald-600 dark:text-emerald-400 select-none shrink-0'
-          : 'inline-flex items-center gap-1 rounded-full bg-muted/60 border border-border/40 px-1.5 py-0.5 text-[10px] font-mono font-medium text-muted-foreground/70 select-none shrink-0'
+          ? `inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 text-[10px] font-mono font-medium text-emerald-600 dark:text-emerald-400 select-none shrink-0 transition-all duration-150 ${
+              justChanged ? 'scale-115 ring-2 ring-emerald-500/60' : 'scale-100'
+            }`
+          : `inline-flex items-center gap-1 rounded-full bg-muted/60 border border-border/40 px-1.5 py-0.5 text-[10px] font-mono font-medium text-muted-foreground/70 select-none shrink-0 transition-all duration-150 ${
+              justChanged ? 'scale-115' : 'scale-100'
+            }`
       }
       title={
         isOnline
-          ? `${onlineCount} active device(s) online${uuidLimit ? ` / Limit: ${uuidLimit}` : ''}`
-          : `No active connections${uuidLimit ? ` / Limit: ${uuidLimit}` : ''}`
+          ? `ANLIK CANLI: ${onlineCount} aktif cihaz bağlı${uuidLimit ? ` / Limit: ${uuidLimit}` : ''}`
+          : `ANLIK CANLI: 0 aktif cihaz bağlı${uuidLimit ? ` / Limit: ${uuidLimit}` : ''}`
       }
     >
       <span className="relative flex h-2 w-2">
@@ -55,9 +74,9 @@ export const UserLiveOnlineCount: React.FC<UserLiveOnlineCountProps> = ({ userId
           }
         />
       </span>
-      <span className="leading-none">
+      <span className="leading-none font-bold">
         {onlineCount}
-        {uuidLimit ? <span className="opacity-60 text-[9px]">/{uuidLimit}</span> : null}
+        {uuidLimit ? <span className="opacity-60 text-[9px] font-normal">/{uuidLimit}</span> : null}
       </span>
     </span>
   )
