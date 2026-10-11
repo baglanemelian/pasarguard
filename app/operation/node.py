@@ -1,4 +1,6 @@
 import asyncio
+import re
+import socket
 from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime as dt
 from typing import ClassVar
@@ -1057,24 +1059,56 @@ class NodeOperation(BaseOperation):
     @staticmethod
     async def _get_known_server_ips(db: AsyncSession) -> set[str]:
         """Collect loopback, node, and proxy host IP addresses to distinguish server/host from client."""
-        server_ips = {"127.0.0.1", "::1", "localhost"}
+        server_ips = {"127.0.0.1", "::1", "localhost", "0.0.0.0"}
+
+        # Local system IPs
+        try:
+            hostname = socket.gethostname()
+            for info in socket.getaddrinfo(hostname, None):
+                ip = info[4][0]
+                if ip:
+                    server_ips.add(str(ip).strip().lower())
+        except Exception:
+            pass
+
+        def _add_addr(raw: str):
+            if not raw:
+                return
+            cleaned = str(raw).strip().lower()
+            if not cleaned:
+                return
+            server_ips.add(cleaned)
+            # If domain or hostname, attempt resolving to numeric IP
+            if not re.match(r"^[\d\.:]+$", cleaned):
+                try:
+                    for res in socket.getaddrinfo(cleaned, None):
+                        resolved_ip = res[4][0]
+                        if resolved_ip:
+                            server_ips.add(str(resolved_ip).strip().lower())
+                except Exception:
+                    pass
+
         try:
             n_res = await db.execute(select(Node.address))
             for addr in n_res.scalars().all():
-                if addr:
-                    server_ips.add(str(addr).strip().lower())
+                _add_addr(addr)
         except Exception:
             pass
 
         try:
-            h_res = await db.execute(select(ProxyHost.address))
-            for addrs in h_res.scalars().all():
-                if isinstance(addrs, (list, set, tuple)):
-                    for a in addrs:
-                        if a:
-                            server_ips.add(str(a).strip().lower())
-                elif addrs:
-                    server_ips.add(str(addrs).strip().lower())
+            h_res = await db.execute(select(ProxyHost.address, ProxyHost.host))
+            for addr_row, host_row in h_res.all():
+                if isinstance(addr_row, (list, set, tuple)):
+                    for a in addr_row:
+                        _add_addr(a)
+                elif addr_row:
+                    _add_addr(addr_row)
+
+                if isinstance(host_row, (list, set, tuple)):
+                    for h in host_row:
+                        _add_addr(h)
+                elif host_row:
+                    _add_addr(host_row)
         except Exception:
             pass
 
@@ -1083,11 +1117,11 @@ class NodeOperation(BaseOperation):
     @staticmethod
     async def _resolve_user_devices(
         db: AsyncSession, db_user: User, server_ips: set[str]
-    ) -> tuple[dict[str, str], dict[str, dict]]:
+    ) -> tuple[dict[str, str], list[str]]:
         """
         Returns:
           - ip_to_device: mapping of client_ip -> human-readable device string
-          - distinct_devices: mapping of "ip | device" -> {"ip": ip, "device": dev, "ts": ts}
+          - known_devices: ordered list of distinct device strings seen for this user (most recent first)
         """
         hwid_details: dict[str, dict] = {}
         try:
@@ -1116,7 +1150,6 @@ class NodeOperation(BaseOperation):
                 )
                 .where(
                     UserSubscriptionUpdate.user_id == db_user.id,
-                    UserSubscriptionUpdate.ip.isnot(None),
                 )
                 .order_by(UserSubscriptionUpdate.created_at.desc())
                 .limit(30)
@@ -1127,15 +1160,10 @@ class NodeOperation(BaseOperation):
             logger.debug(f"Error reading UserSubscriptionUpdate for user {db_user.id}: {e}")
 
         ip_to_device: dict[str, str] = {}
-        distinct_devices: dict[str, dict] = {}
+        seen_devices: set[str] = set()
+        known_devices: list[str] = []
 
         for s_ip, s_ua, s_hw, s_created in sub_records:
-            if not s_ip:
-                continue
-            client_ip = str(s_ip).strip()
-            if client_ip.lower() in server_ips:
-                continue
-
             hw_data = hwid_details.get(s_hw, {})
             dev_label = parse_device_info(
                 user_agent=s_ua,
@@ -1144,14 +1172,31 @@ class NodeOperation(BaseOperation):
                 os_version=hw_data.get("os_version"),
                 device_model=hw_data.get("device_model"),
             )
-            ip_to_device[client_ip] = dev_label
+            if dev_label and dev_label not in seen_devices:
+                seen_devices.add(dev_label)
+                known_devices.append(dev_label)
 
-            device_key = f"{client_ip} | {dev_label}"
-            ts = int(s_created.timestamp()) if hasattr(s_created, "timestamp") else int(dt.now(UTC).timestamp())
-            if device_key not in distinct_devices or ts > distinct_devices[device_key]["ts"]:
-                distinct_devices[device_key] = {"ip": client_ip, "device": dev_label, "ts": ts}
+            if s_ip:
+                client_ip = str(s_ip).strip()
+                if (
+                    client_ip.lower() not in server_ips
+                    and client_ip.lower() not in {"127.0.0.1", "::1", "localhost", "0.0.0.0"}
+                ):
+                    if client_ip not in ip_to_device and dev_label:
+                        ip_to_device[client_ip] = dev_label
 
-        return ip_to_device, distinct_devices
+        for hw_hwid, hw_data in hwid_details.items():
+            dev_label = parse_device_info(
+                hwid=hw_hwid,
+                device_os=hw_data.get("device_os"),
+                os_version=hw_data.get("os_version"),
+                device_model=hw_data.get("device_model"),
+            )
+            if dev_label and dev_label not in seen_devices:
+                seen_devices.add(dev_label)
+                known_devices.append(dev_label)
+
+        return ip_to_device, known_devices
 
     async def _get_user_ip_list_local(self, db: AsyncSession, node_id: int, user_id: int) -> UserIPList:
         db_user = await get_user_by_id(db, user_id)
@@ -1159,27 +1204,34 @@ class NodeOperation(BaseOperation):
             await self.raise_error(message="User not found", code=404)
 
         server_ips = await self._get_known_server_ips(db)
-        ip_to_device, distinct_devices = await self._resolve_user_devices(db, db_user, server_ips)
-
         email = f"{db_user.id}"
         raw_ips = await self._get_node_user_ip_list_safe(node_id, email, server_ips)
-        formatted_ips = {}
-        if raw_ips:
-            for ip, ts in raw_ips.items():
-                dev_label = ip_to_device.get(ip, "📱 Mobile Device")
-                formatted_ips[f"{ip} | {dev_label}"] = ts
 
-        if not formatted_ips:
-            now_utc = dt.now(UTC)
-            if db_user.online_at:
-                user_online_at = db_user.online_at if db_user.online_at.tzinfo else db_user.online_at.replace(tzinfo=UTC)
-                if 0 <= (now_utc - user_online_at).total_seconds() <= 180:
-                    if distinct_devices:
-                        for dev_key, dev_info in distinct_devices.items():
-                            formatted_ips[dev_key] = dev_info["ts"]
-                    else:
-                        ts = int(user_online_at.timestamp())
-                        formatted_ips["Active Client | 📱 Mobile Device"] = ts
+        if not raw_ips:
+            # Strictly return empty when no active connections exist on this node
+            return UserIPList(ips={})
+
+        ip_to_device, known_devices = await self._resolve_user_devices(db, db_user, server_ips)
+
+        formatted_ips: dict[str, int] = {}
+        assigned_devices: set[str] = set()
+
+        unmatched_ips: list[tuple[str, int]] = []
+        for ip, ts in raw_ips.items():
+            if ip in ip_to_device:
+                dev = ip_to_device[ip]
+                assigned_devices.add(dev)
+                formatted_ips[f"{ip} | {dev}"] = ts
+            else:
+                unmatched_ips.append((ip, ts))
+
+        available_devices = [d for d in known_devices if d not in assigned_devices]
+        for ip, ts in unmatched_ips:
+            if available_devices:
+                dev = available_devices.pop(0)
+            else:
+                dev = "📱 Connected Device"
+            formatted_ips[f"{ip} | {dev}"] = ts
 
         return UserIPList(ips=formatted_ips)
 
@@ -1196,8 +1248,6 @@ class NodeOperation(BaseOperation):
             await self.raise_error(message="User not found", code=404)
 
         server_ips = await self._get_known_server_ips(db)
-        ip_to_device, distinct_devices = await self._resolve_user_devices(db, db_user, server_ips)
-
         nodes = await node_manager.get_healthy_nodes()
         email = f"{db_user.id}"
 
@@ -1207,58 +1257,46 @@ class NodeOperation(BaseOperation):
         }
         await asyncio.gather(*ip_list_tasks.values(), return_exceptions=True)
 
-        results = {}
+        node_raw_ips: dict[int, dict[str, int]] = {}
         for node_id, task in ip_list_tasks.items():
             if task.exception() or task.result() is None:
                 continue
             raw_node_ips = task.result()
-            if not raw_node_ips:
-                continue
+            if raw_node_ips:
+                node_raw_ips[node_id] = raw_node_ips
 
-            formatted_node_ips = {}
-            for ip, ts in raw_node_ips.items():
-                dev_label = ip_to_device.get(ip, "📱 Mobile Device")
-                formatted_node_ips[f"{ip} | {dev_label}"] = ts
+        if not node_raw_ips:
+            # Strictly return empty when no active connections exist on any node
+            return UserIPListAll(nodes={})
 
-            if formatted_node_ips:
-                results[node_id] = UserIPList(ips=formatted_node_ips)
+        ip_to_device, known_devices = await self._resolve_user_devices(db, db_user, server_ips)
 
-        # Fallback if no direct IPs found from Xray core (or only host/relay IPs were present)
-        if not results:
-            now_utc = dt.now(UTC)
-            is_active = False
-            if db_user.online_at:
-                user_online_at = db_user.online_at if db_user.online_at.tzinfo else db_user.online_at.replace(tzinfo=UTC)
-                if 0 <= (now_utc - user_online_at).total_seconds() <= 180:
-                    is_active = True
+        results: dict[int, UserIPList] = {}
+        assigned_devices: set[str] = set()
 
-            if is_active:
-                active_node_id = None
-                try:
-                    stmt = (
-                        select(NodeUserUsage.node_id)
-                        .where(NodeUserUsage.user_id == db_user.id, NodeUserUsage.node_id.isnot(None))
-                        .order_by(NodeUserUsage.created_at.desc())
-                        .limit(1)
-                    )
-                    res = await db.execute(stmt)
-                    active_node_id = res.scalar_one_or_none()
-                except Exception as e:
-                    logger.debug(f"Could not fetch recent NodeUserUsage for user {user_id}: {e}")
+        unmatched_entries: list[tuple[int, str, int]] = []
+        node_formatted_ips: dict[int, dict[str, int]] = {nid: {} for nid in node_raw_ips}
 
-                if not active_node_id and nodes:
-                    active_node_id = nodes[0][0]
+        for node_id, raw_ips in node_raw_ips.items():
+            for ip, ts in raw_ips.items():
+                if ip in ip_to_device:
+                    dev = ip_to_device[ip]
+                    assigned_devices.add(dev)
+                    node_formatted_ips[node_id][f"{ip} | {dev}"] = ts
+                else:
+                    unmatched_entries.append((node_id, ip, ts))
 
-                if active_node_id:
-                    fallback_ips: dict[str, int] = {}
-                    if distinct_devices:
-                        for dev_key, dev_info in distinct_devices.items():
-                            fallback_ips[dev_key] = dev_info["ts"]
-                    else:
-                        ts = int(user_online_at.timestamp())
-                        fallback_ips["Active Client | 📱 Mobile Device"] = ts
+        available_devices = [d for d in known_devices if d not in assigned_devices]
+        for node_id, ip, ts in unmatched_entries:
+            if available_devices:
+                dev = available_devices.pop(0)
+            else:
+                dev = "📱 Connected Device"
+            node_formatted_ips[node_id][f"{ip} | {dev}"] = ts
 
-                    results[active_node_id] = UserIPList(ips=fallback_ips)
+        for node_id, f_ips in node_formatted_ips.items():
+            if f_ips:
+                results[node_id] = UserIPList(ips=f_ips)
 
         return UserIPListAll(nodes=results)
 

@@ -1,4 +1,5 @@
 import React, { useMemo, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useUserOnlineIpListAllNodes } from '@/service/api'
 
 interface UserLiveOnlineCountProps {
@@ -8,6 +9,7 @@ interface UserLiveOnlineCountProps {
 }
 
 export const UserLiveOnlineCount: React.FC<UserLiveOnlineCountProps> = ({ userId, uuidLimit, lastOnline }) => {
+  const { t } = useTranslation()
   if (!userId) return null
 
   const { data } = useUserOnlineIpListAllNodes(userId, {
@@ -20,14 +22,6 @@ export const UserLiveOnlineCount: React.FC<UserLiveOnlineCountProps> = ({ userId
       enabled: !!userId,
     },
   })
-
-  // Check if user was online in the last 90 seconds from traffic logs / database
-  const isRecentlyActive = useMemo(() => {
-    if (!lastOnline) return false
-    const now = Date.now()
-    const last = new Date(lastOnline).getTime()
-    return !isNaN(last) && now - last <= 90 * 1000
-  }, [lastOnline])
 
   // Count active IPs from node real-time responses
   const detectedCount = useMemo(() => {
@@ -45,13 +39,10 @@ export const UserLiveOnlineCount: React.FC<UserLiveOnlineCountProps> = ({ userId
     return ips.size
   }, [data])
 
-  // If node query returned detected active IPs, use detectedCount.
-  // If node query returned 0 IPs (e.g. reverse proxy dropped loopback or delay) BUT user has recent online_at traffic, fallback to at least 1 device!
+  // Pure real-time online count: when VPN closes, it immediately becomes 0
   const onlineCount = useMemo(() => {
-    if (detectedCount > 0) return detectedCount
-    if (isRecentlyActive) return 1
-    return 0
-  }, [detectedCount, isRecentlyActive])
+    return detectedCount
+  }, [detectedCount])
 
   const [justChanged, setJustChanged] = useState(false)
   const prevCountRef = useRef(onlineCount)
@@ -70,13 +61,24 @@ export const UserLiveOnlineCount: React.FC<UserLiveOnlineCountProps> = ({ userId
 
   const tooltipTitle = useMemo(() => {
     if (isOverLimit) {
-      return `LİMİT AŞILDI: ${onlineCount} aktif cihaz bağlı (İzin verilen limit: ${uuidLimit})`
+      return t('userOnline.limitExceeded', {
+        defaultValue: 'LIMIT EXCEEDED: {{count}} active devices connected (Limit: {{limit}})',
+        count: onlineCount,
+        limit: uuidLimit,
+      })
     }
     if (isOnline) {
-      return `Çevrimiçi: ${onlineCount} aktif cihaz bağlı${uuidLimit ? ` / Limit: ${uuidLimit}` : ''}`
+      return t('userOnline.onlineWithCount', {
+        defaultValue: 'Online: {{count}} active device(s) connected{{limit}}',
+        count: onlineCount,
+        limit: uuidLimit ? ` / Limit: ${uuidLimit}` : '',
+      })
     }
-    return `Çevrimdışı (Bağlı cihaz yok)${uuidLimit ? ` / Limit: ${uuidLimit}` : ''}`
-  }, [isOverLimit, isOnline, onlineCount, uuidLimit])
+    return t('userOnline.offlineNoDevices', {
+      defaultValue: 'Offline (No connected devices){{limit}}',
+      limit: uuidLimit ? ` / Limit: ${uuidLimit}` : '',
+    })
+  }, [isOverLimit, isOnline, onlineCount, uuidLimit, t])
 
   return (
     <span

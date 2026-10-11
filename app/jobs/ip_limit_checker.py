@@ -34,7 +34,8 @@ async def check_user_ip_limits_job():
             if not users_with_limits:
                 return
 
-            loopback_ips = {"127.0.0.1", "::1", "localhost"}
+            server_ips = await NodeOperation._get_known_server_ips(db)
+            loopback_ips = {"127.0.0.1", "::1", "localhost", "0.0.0.0"}
 
             for user in users_with_limits:
                 try:
@@ -44,10 +45,10 @@ async def check_user_ip_limits_job():
                     if ip_list_all and ip_list_all.nodes:
                         for node_id, node_ips in ip_list_all.nodes.items():
                             if node_ips and node_ips.ips:
-                                for ip in node_ips.ips.keys():
-                                    ip_clean = str(ip).strip().lower()
-                                    if ip_clean and ip_clean not in loopback_ips:
-                                        active_ips.add(str(ip).strip())
+                                for key in node_ips.ips.keys():
+                                    pure_ip = key.split(" | ")[0].strip().lower() if " | " in key else key.strip().lower()
+                                    if pure_ip and pure_ip not in server_ips and pure_ip not in loopback_ips:
+                                        active_ips.add(pure_ip)
 
                     ip_count = len(active_ips)
                     max_allowed = user.uuid_limit
@@ -68,7 +69,7 @@ async def check_user_ip_limits_job():
 
                         logger.warning(
                             f"[IP Limit Exceeded] User '{user.username}' (ID: {user.id}) has {ip_count} "
-                            f"active devices connected (Limit: {max_allowed}, Streak: {streak}). Active devices: {sorted(list(active_ips))}"
+                            f"active devices connected (Limit: {max_allowed}, Streak: {streak}). Active IPs: {sorted(list(active_ips))}"
                         )
 
                         # Enforce limit immediately: sever excess sockets on nodes
@@ -98,7 +99,7 @@ if runtime_settings.role.runs_scheduler:
     scheduler.add_job(
         check_user_ip_limits_job,
         "interval",
-        seconds=10,
+        seconds=5,
         coalesce=True,
         max_instances=1,
         start_date=now + td(seconds=5),

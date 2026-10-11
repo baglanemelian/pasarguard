@@ -47,11 +47,10 @@ const NodeIPCard = React.memo(({ nodeId, nodeName, ips }: NodeIPCardProps) => {
         let tsNum = Number(timestamp)
         if (tsNum < 1e12) tsNum = tsNum * 1000
         const date = new Date(tsNum)
-        const timeString = date.toLocaleTimeString('en-US', {
+        const timeString = date.toLocaleTimeString([], {
           hour: '2-digit',
           minute: '2-digit',
           second: '2-digit',
-          hour12: false,
         })
 
         let ip = rawKey.trim()
@@ -82,7 +81,10 @@ const NodeIPCard = React.memo(({ nodeId, nodeName, ips }: NodeIPCardProps) => {
             </span>
           </CardTitle>
           <Badge dir={dir} variant="secondary" className="text-xs px-2 py-0.5 font-medium">
-            {totalIPs === 1 ? '1 Bağlı Cihaz' : `${totalIPs} Bağlı Cihaz`}
+            {t('userAllIPs.connectedDevices', {
+              defaultValue: totalIPs === 1 ? '1 Connected Device' : '{{count}} Connected Devices',
+              count: totalIPs,
+            })}
           </Badge>
         </div>
       </CardHeader>
@@ -103,7 +105,7 @@ const NodeIPCard = React.memo(({ nodeId, nodeName, ips }: NodeIPCardProps) => {
                     ) : (
                       <div className="text-sm font-semibold text-foreground flex items-center gap-1.5">
                         <span>📱</span>
-                        <span>Bağlı Cihaz</span>
+                        <span>{t('userAllIPs.connectedDevice', { defaultValue: 'Connected Device' })}</span>
                       </div>
                     )}
                     <div className="flex items-center gap-2">
