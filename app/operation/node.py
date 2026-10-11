@@ -30,7 +30,8 @@ from app.db.crud.node import (
     update_node_status,
 )
 from app.db.crud.user import get_user_by_id, get_user_count_metric_stats
-from app.db.models import Node, NodeStatus, NodeUserUsage, UserSubscriptionUpdate
+from app.db.models import Node, NodeStatus, NodeUserUsage, ProxyHost, UserHWID, UserSubscriptionUpdate
+from app.utils.device import parse_device_info
 from app.models.admin import AdminDetails
 from app.models.core import CoreType
 from app.models.node import (
@@ -660,8 +661,10 @@ class NodeOperation(BaseOperation):
     async def get_user_ip_list_all_nodes(self, db: AsyncSession, user_id: int) -> UserIPListAll:
         return await self._get_user_ip_list_all_impl(db, user_id)
 
-    async def _get_node_user_ip_list_safe(self, node_id: int, email: str) -> dict[str, int] | None:
-        """Wrapper method that returns None instead of raising exceptions, filtering loopback IPs."""
+    async def _get_node_user_ip_list_safe(
+        self, node_id: int, email: str, server_ips: set[str] | None = None
+    ) -> dict[str, int] | None:
+        """Wrapper method that returns None instead of raising exceptions, filtering loopback and server IPs."""
         try:
             node = await node_manager.get_node(node_id)
             if node is None:
@@ -672,11 +675,14 @@ class NodeOperation(BaseOperation):
                 return None
 
             loopback_ips = {"127.0.0.1", "::1", "localhost"}
+            server_ips = server_ips or set()
             raw_ips = getattr(stats, "ips", None) or {}
             filtered_ips = {
-                str(ip): int(ts)
+                str(ip).strip(): int(ts)
                 for ip, ts in dict(raw_ips).items()
-                if str(ip).strip() and str(ip).lower() not in loopback_ips
+                if str(ip).strip()
+                and str(ip).lower() not in loopback_ips
+                and str(ip).lower() not in server_ips
             }
             return filtered_ips
         except NodeAPIError as e:
@@ -1048,44 +1054,134 @@ class NodeOperation(BaseOperation):
         except RuntimeError as exc:
             await self.handle_rpc_error(exc)
 
+    @staticmethod
+    async def _get_known_server_ips(db: AsyncSession) -> set[str]:
+        """Collect loopback, node, and proxy host IP addresses to distinguish server/host from client."""
+        server_ips = {"127.0.0.1", "::1", "localhost"}
+        try:
+            n_res = await db.execute(select(Node.address))
+            for addr in n_res.scalars().all():
+                if addr:
+                    server_ips.add(str(addr).strip().lower())
+        except Exception:
+            pass
+
+        try:
+            h_res = await db.execute(select(ProxyHost.address))
+            for addrs in h_res.scalars().all():
+                if isinstance(addrs, (list, set, tuple)):
+                    for a in addrs:
+                        if a:
+                            server_ips.add(str(a).strip().lower())
+                elif addrs:
+                    server_ips.add(str(addrs).strip().lower())
+        except Exception:
+            pass
+
+        return server_ips
+
+    @staticmethod
+    async def _resolve_user_devices(
+        db: AsyncSession, db_user: User, server_ips: set[str]
+    ) -> tuple[dict[str, str], dict[str, dict]]:
+        """
+        Returns:
+          - ip_to_device: mapping of client_ip -> human-readable device string
+          - distinct_devices: mapping of "ip | device" -> {"ip": ip, "device": dev, "ts": ts}
+        """
+        hwid_details: dict[str, dict] = {}
+        try:
+            hw_res = await db.execute(
+                select(UserHWID.hwid, UserHWID.device_os, UserHWID.os_version, UserHWID.device_model)
+                .where(UserHWID.user_id == db_user.id)
+            )
+            for row in hw_res.all():
+                if row[0]:
+                    hwid_details[row[0]] = {
+                        "device_os": row[1],
+                        "os_version": row[2],
+                        "device_model": row[3],
+                    }
+        except Exception as e:
+            logger.debug(f"Error reading UserHWID for user {db_user.id}: {e}")
+
+        sub_records = []
+        try:
+            sub_stmt = (
+                select(
+                    UserSubscriptionUpdate.ip,
+                    UserSubscriptionUpdate.user_agent,
+                    UserSubscriptionUpdate.hwid,
+                    UserSubscriptionUpdate.created_at,
+                )
+                .where(
+                    UserSubscriptionUpdate.user_id == db_user.id,
+                    UserSubscriptionUpdate.ip.isnot(None),
+                )
+                .order_by(UserSubscriptionUpdate.created_at.desc())
+                .limit(30)
+            )
+            sub_res = await db.execute(sub_stmt)
+            sub_records = sub_res.all()
+        except Exception as e:
+            logger.debug(f"Error reading UserSubscriptionUpdate for user {db_user.id}: {e}")
+
+        ip_to_device: dict[str, str] = {}
+        distinct_devices: dict[str, dict] = {}
+
+        for s_ip, s_ua, s_hw, s_created in sub_records:
+            if not s_ip:
+                continue
+            client_ip = str(s_ip).strip()
+            if client_ip.lower() in server_ips:
+                continue
+
+            hw_data = hwid_details.get(s_hw, {})
+            dev_label = parse_device_info(
+                user_agent=s_ua,
+                hwid=s_hw,
+                device_os=hw_data.get("device_os"),
+                os_version=hw_data.get("os_version"),
+                device_model=hw_data.get("device_model"),
+            )
+            ip_to_device[client_ip] = dev_label
+
+            device_key = f"{client_ip} | {dev_label}"
+            ts = int(s_created.timestamp()) if hasattr(s_created, "timestamp") else int(dt.now(UTC).timestamp())
+            if device_key not in distinct_devices or ts > distinct_devices[device_key]["ts"]:
+                distinct_devices[device_key] = {"ip": client_ip, "device": dev_label, "ts": ts}
+
+        return ip_to_device, distinct_devices
+
     async def _get_user_ip_list_local(self, db: AsyncSession, node_id: int, user_id: int) -> UserIPList:
         db_user = await get_user_by_id(db, user_id)
         if db_user is None:
             await self.raise_error(message="User not found", code=404)
 
-        email = f"{db_user.id}"
-        ips = await self._get_node_user_ip_list_safe(node_id, email)
-        if ips is None:
-            ips = {}
+        server_ips = await self._get_known_server_ips(db)
+        ip_to_device, distinct_devices = await self._resolve_user_devices(db, db_user, server_ips)
 
-        if not ips:
+        email = f"{db_user.id}"
+        raw_ips = await self._get_node_user_ip_list_safe(node_id, email, server_ips)
+        formatted_ips = {}
+        if raw_ips:
+            for ip, ts in raw_ips.items():
+                dev_label = ip_to_device.get(ip, "📱 Mobile Device")
+                formatted_ips[f"{ip} | {dev_label}"] = ts
+
+        if not formatted_ips:
             now_utc = dt.now(UTC)
             if db_user.online_at:
                 user_online_at = db_user.online_at if db_user.online_at.tzinfo else db_user.online_at.replace(tzinfo=UTC)
                 if 0 <= (now_utc - user_online_at).total_seconds() <= 180:
-                    client_ip = None
-                    try:
-                        sub_stmt = (
-                            select(UserSubscriptionUpdate.ip)
-                            .where(
-                                UserSubscriptionUpdate.user_id == db_user.id,
-                                UserSubscriptionUpdate.ip.isnot(None),
-                            )
-                            .order_by(UserSubscriptionUpdate.created_at.desc())
-                            .limit(1)
-                        )
-                        sub_res = await db.execute(sub_stmt)
-                        client_ip = sub_res.scalar_one_or_none()
-                    except Exception:
-                        pass
+                    if distinct_devices:
+                        for dev_key, dev_info in distinct_devices.items():
+                            formatted_ips[dev_key] = dev_info["ts"]
+                    else:
+                        ts = int(user_online_at.timestamp())
+                        formatted_ips["Active Client | 📱 Mobile Device"] = ts
 
-                    loopback_ips = {"127.0.0.1", "::1", "localhost"}
-                    if not client_ip or client_ip.lower() in loopback_ips:
-                        client_ip = "Active Connection"
-                    ts = int(user_online_at.timestamp())
-                    return UserIPList(ips={client_ip: ts})
-
-        return UserIPList(ips=ips)
+        return UserIPList(ips=formatted_ips)
 
     async def _get_user_ip_list_remote(self, db: AsyncSession, node_id: int, user_id: int) -> UserIPList:
         try:
@@ -1099,22 +1195,35 @@ class NodeOperation(BaseOperation):
         if db_user is None:
             await self.raise_error(message="User not found", code=404)
 
+        server_ips = await self._get_known_server_ips(db)
+        ip_to_device, distinct_devices = await self._resolve_user_devices(db, db_user, server_ips)
+
         nodes = await node_manager.get_healthy_nodes()
         email = f"{db_user.id}"
 
-        ip_list_tasks = {id: asyncio.create_task(self._get_node_user_ip_list_safe(id, email)) for id, _ in nodes}
-
+        ip_list_tasks = {
+            id: asyncio.create_task(self._get_node_user_ip_list_safe(id, email, server_ips))
+            for id, _ in nodes
+        }
         await asyncio.gather(*ip_list_tasks.values(), return_exceptions=True)
 
         results = {}
         for node_id, task in ip_list_tasks.items():
             if task.exception() or task.result() is None:
                 continue
-            ips = task.result()
-            if ips:
-                results[node_id] = UserIPList(ips=ips)
+            raw_node_ips = task.result()
+            if not raw_node_ips:
+                continue
 
-        # Fallback if no direct IPs found from Xray core online_map
+            formatted_node_ips = {}
+            for ip, ts in raw_node_ips.items():
+                dev_label = ip_to_device.get(ip, "📱 Mobile Device")
+                formatted_node_ips[f"{ip} | {dev_label}"] = ts
+
+            if formatted_node_ips:
+                results[node_id] = UserIPList(ips=formatted_node_ips)
+
+        # Fallback if no direct IPs found from Xray core (or only host/relay IPs were present)
         if not results:
             now_utc = dt.now(UTC)
             is_active = False
@@ -1141,28 +1250,15 @@ class NodeOperation(BaseOperation):
                     active_node_id = nodes[0][0]
 
                 if active_node_id:
-                    client_ip = None
-                    try:
-                        sub_stmt = (
-                            select(UserSubscriptionUpdate.ip)
-                            .where(
-                                UserSubscriptionUpdate.user_id == db_user.id,
-                                UserSubscriptionUpdate.ip.isnot(None),
-                            )
-                            .order_by(UserSubscriptionUpdate.created_at.desc())
-                            .limit(1)
-                        )
-                        sub_res = await db.execute(sub_stmt)
-                        client_ip = sub_res.scalar_one_or_none()
-                    except Exception as e:
-                        logger.debug(f"Could not fetch UserSubscriptionUpdate IP for user {user_id}: {e}")
+                    fallback_ips: dict[str, int] = {}
+                    if distinct_devices:
+                        for dev_key, dev_info in distinct_devices.items():
+                            fallback_ips[dev_key] = dev_info["ts"]
+                    else:
+                        ts = int(user_online_at.timestamp())
+                        fallback_ips["Active Client | 📱 Mobile Device"] = ts
 
-                    loopback_ips = {"127.0.0.1", "::1", "localhost"}
-                    if not client_ip or client_ip.lower() in loopback_ips:
-                        client_ip = "Active Connection"
-
-                    ts = int(user_online_at.timestamp())
-                    results[active_node_id] = UserIPList(ips={client_ip: ts})
+                    results[active_node_id] = UserIPList(ips=fallback_ips)
 
         return UserIPListAll(nodes=results)
 

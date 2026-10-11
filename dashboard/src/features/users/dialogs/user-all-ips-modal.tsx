@@ -43,7 +43,7 @@ const NodeIPCard = React.memo(({ nodeId, nodeName, ips }: NodeIPCardProps) => {
 
   const ipEntries = useMemo(() => {
     return Object.entries(ips)
-      .map(([ip, timestamp]) => {
+      .map(([rawKey, timestamp]) => {
         let tsNum = Number(timestamp)
         if (tsNum < 1e12) tsNum = tsNum * 1000
         const date = new Date(tsNum)
@@ -53,7 +53,16 @@ const NodeIPCard = React.memo(({ nodeId, nodeName, ips }: NodeIPCardProps) => {
           second: '2-digit',
           hour12: false,
         })
-        return { ip, timestamp: tsNum, timeString }
+
+        let ip = rawKey.trim()
+        let device = ''
+        if (rawKey.includes(' | ')) {
+          const parts = rawKey.split(' | ')
+          ip = parts[0].trim()
+          device = parts.slice(1).join(' | ').trim()
+        }
+
+        return { rawKey, ip, device, timestamp: tsNum, timeString }
       })
       .sort((a, b) => b.timestamp - a.timestamp)
   }, [ips])
@@ -63,7 +72,7 @@ const NodeIPCard = React.memo(({ nodeId, nodeName, ips }: NodeIPCardProps) => {
   }, [ips])
 
   return (
-    <Card className="hover:bg-accent/50 transition-colors">
+    <Card className="hover:bg-accent/40 transition-colors border border-border/60">
       <CardHeader className="pb-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="flex items-center gap-2 text-sm font-medium">
@@ -72,34 +81,51 @@ const NodeIPCard = React.memo(({ nodeId, nodeName, ips }: NodeIPCardProps) => {
               {nodeName || t('userAllIPs.nodeId', { defaultValue: 'Node #{{nodeId}}', nodeId })}
             </span>
           </CardTitle>
-          <Badge dir={dir} variant="outline" className="border-0 px-0 text-xs">
-            {t('userAllIPs.totalIPs', {
-              defaultValue: totalIPs === 1 ? '{{count}} IP address' : '{{count}} IP addresses',
-              count: totalIPs,
-            })}
+          <Badge dir={dir} variant="secondary" className="text-xs px-2 py-0.5 font-medium">
+            {totalIPs === 1 ? '1 Bağlı Cihaz' : `${totalIPs} Bağlı Cihaz`}
           </Badge>
         </div>
       </CardHeader>
       <CardContent className="pt-0">
         <div className="space-y-2">
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {ipEntries.map(({ ip, timeString }) => (
-              <div key={ip} className="bg-accent/40 hover:bg-accent/60 rounded p-2 transition-colors">
-                <div className="flex flex-col gap-1">
-                  <span
-                    className="hover:text-primary cursor-pointer font-mono text-sm font-medium break-all transition-colors"
-                    dir="ltr"
-                    onClick={() => handleCopyIP(ip)}
-                    title={t('userAllIPs.clickToCopy', { defaultValue: 'Click to copy IP address' })}
-                  >
-                    {ip}
-                  </span>
-                  <div dir={dir} className="flex items-center gap-1">
-                    <span className="text-muted-foreground text-xs">{t('userAllIPs.lastSeen', { defaultValue: 'Last seen' })}:</span>
-                    <span className="text-muted-foreground font-mono text-xs" dir="ltr">
-                      {timeString}
-                    </span>
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            {ipEntries.map(({ rawKey, ip, device, timeString }) => (
+              <div
+                key={rawKey}
+                className="bg-accent/30 hover:bg-accent/60 border border-border/40 rounded-lg p-3 transition-all duration-150 flex flex-col justify-between gap-2 shadow-xs"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex flex-col gap-1 min-w-0 flex-1">
+                    {device ? (
+                      <div className="text-sm font-semibold text-foreground truncate" title={device}>
+                        {device}
+                      </div>
+                    ) : (
+                      <div className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                        <span>📱</span>
+                        <span>Bağlı Cihaz</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="font-mono text-xs text-primary/90 hover:text-primary hover:underline cursor-pointer font-medium select-all transition-colors"
+                        dir="ltr"
+                        onClick={() => handleCopyIP(ip)}
+                        title={t('userAllIPs.clickToCopy', { defaultValue: 'Click to copy IP address' })}
+                      >
+                        {ip}
+                      </span>
+                    </div>
                   </div>
+                  <span className="relative flex h-2 w-2 mt-1 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                  </span>
+                </div>
+
+                <div dir={dir} className="flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/30 pt-1.5">
+                  <span>{t('userAllIPs.lastSeen', { defaultValue: 'Last seen' })}</span>
+                  <span className="font-mono" dir="ltr">{timeString}</span>
                 </div>
               </div>
             ))}

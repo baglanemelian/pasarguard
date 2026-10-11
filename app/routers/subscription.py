@@ -7,6 +7,7 @@ from app.models.stats import UserUsageStatsList
 from app.models.user import SubscriptionUserResponse
 from app.operation import OperatorType
 from app.operation.subscription import SubscriptionOperation
+from app.utils.request import get_client_ip
 from config import subscription_env_settings
 
 from .dependencies import get_subscription_headers, get_subscription_usage_query
@@ -30,7 +31,7 @@ async def user_subscription(
         token=token,
         accept_header=request.headers.get("Accept", ""),
         user_agent=user_agent,
-        ip=request.client.host if request.client else None,
+        ip=get_client_ip(request),
         request_url=str(request.url),
         **headers.model_dump(),
     )
@@ -56,10 +57,15 @@ async def user_subscription_headers(
 
 
 @router.get("/{token}/info", response_model=SubscriptionUserResponse)
-async def user_subscription_info(request: Request, token: str, db: AsyncSession = Depends(get_db)):
+async def user_subscription_info(
+    request: Request,
+    token: str,
+    db: AsyncSession = Depends(get_db),
+    user_agent: str = Header(default=""),
+):
     """Retrieves detailed information about the user's subscription."""
     user_data, response_headers = await subscription_operator.user_subscription_info(
-        db, token=token, ip=request.client.host if request.client else None
+        db, token=token, ip=get_client_ip(request), user_agent=user_agent
     )
     return JSONResponse(content=user_data.model_dump(mode="json"), headers=response_headers)
 
@@ -93,6 +99,7 @@ async def user_subscription_with_client_type(
     token: str,
     client_type: ConfigFormat,
     db: AsyncSession = Depends(get_db),
+    user_agent: str = Header(default=""),
     headers=Depends(get_subscription_headers),
 ):
     """Provides a subscription link based on the specified client type (e.g., Clash, V2Ray)."""
@@ -101,5 +108,7 @@ async def user_subscription_with_client_type(
         token=token,
         client_type=client_type,
         request_url=str(request.url),
+        user_agent=user_agent,
+        ip=get_client_ip(request),
         **headers.model_dump(),
     )

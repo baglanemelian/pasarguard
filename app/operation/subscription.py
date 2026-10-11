@@ -550,6 +550,8 @@ class SubscriptionOperation(BaseOperation):
         token: str,
         client_type: ConfigFormat,
         request_url: str = "",
+        user_agent: str = "",
+        ip: str | None = None,
         x_hwid: str | None = None,
         x_device_os: str | None = None,
         x_ver_os: str | None = None,
@@ -574,6 +576,9 @@ class SubscriptionOperation(BaseOperation):
             x_device_model,
             is_manual_sub=True,
         )
+
+        # Update user subscription info with client IP & user agent
+        await user_sub_update(db, db_user.id, user_agent, ip=ip, hwid=x_hwid)
 
         response_headers = self.create_response_headers(
             user, request_url, sub_settings, extension=client_config.get(client_type, {}).get("extension", "")
@@ -698,12 +703,15 @@ class SubscriptionOperation(BaseOperation):
         return await self.user_subscription_by_user(db_user, client_type, request_url)
 
     async def user_subscription_info(
-        self, db: AsyncSession, token: str, ip: str | None = None
+        self, db: AsyncSession, token: str, ip: str | None = None, user_agent: str = ""
     ) -> tuple[SubscriptionUserResponse, dict]:
         """Retrieves detailed information about the user's subscription."""
         sub_settings: SubSettings = await subscription_settings()
         db_user = await self.get_validated_sub(db, token=token, **self._SUB_INFO_LOAD)
         user = await self.validated_user(db_user)
+
+        if ip:
+            await user_sub_update(db, db_user.id, user_agent, ip=ip)
 
         response_headers = self.create_info_response_headers(user, sub_settings)
         try:

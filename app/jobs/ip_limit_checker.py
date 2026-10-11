@@ -68,17 +68,14 @@ async def check_user_ip_limits_job():
 
                         logger.warning(
                             f"[IP Limit Exceeded] User '{user.username}' (ID: {user.id}) has {ip_count} "
-                            f"active IPs connected (Limit: {max_allowed}, Streak: {streak}). Active IPs: {sorted(list(active_ips))}"
+                            f"active devices connected (Limit: {max_allowed}, Streak: {streak}). Active devices: {sorted(list(active_ips))}"
                         )
 
-                        # Enforce limit: on persistent violation (streak >= 2 checks, ~30s), sever connections
-                        if streak >= 2:
-                            logger.info(
-                                f"Enforcing IP limit on user '{user.username}' (streak={streak}). Severing excess connections..."
-                            )
-                            asyncio.create_task(sever_user_connections(user))
-                            # Reset streak to 1 to prevent continuous thrashing
-                            _violations_cache[user.id]["streak"] = 1
+                        # Enforce limit immediately: sever excess sockets on nodes
+                        logger.info(
+                            f"Enforcing IP limit on user '{user.username}' (count={ip_count} > limit={max_allowed}). Severing excess connections..."
+                        )
+                        asyncio.create_task(sever_user_connections(user))
                     else:
                         # Clear violation if back within limit
                         if user.id in _violations_cache:
@@ -101,10 +98,10 @@ if runtime_settings.role.runs_scheduler:
     scheduler.add_job(
         check_user_ip_limits_job,
         "interval",
-        seconds=15,
+        seconds=10,
         coalesce=True,
         max_instances=1,
-        start_date=now + td(seconds=10),
+        start_date=now + td(seconds=5),
         id="check_user_ip_limits",
         replace_existing=True,
     )
