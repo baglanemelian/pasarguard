@@ -1843,7 +1843,11 @@
     "errorLoading": "Unable to load IP addresses: {{message}}",
     "noIPs": "No active IP addresses found. This user may not be currently connected to any nodes.",
     "ipCopied": "IP address copied to clipboard",
-    "clickToCopy": "Click to copy IP address"
+    "clickToCopy": "Click to copy IP address",
+    "connectedDevice": "Connected Device",
+    "connectedDeviceOne": "1 Connected Device",
+    "connectedDevices": "{{count}} Connected Devices",
+    "liveConnection": "Active Connection"
   },
   "search": "Search",
   "status.active": "Active",

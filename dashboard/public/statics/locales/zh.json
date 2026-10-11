@@ -1823,7 +1823,11 @@
     "errorLoading": "无法加载 IP 地址：{{message}}",
     "noIPs": "未找到活动的 IP 地址。此用户可能当前未连接到任何节点。",
     "ipCopied": "IP 地址已复制到剪贴板",
-    "clickToCopy": "点击复制 IP 地址"
+    "clickToCopy": "点击复制 IP 地址",
+    "connectedDevice": "已连接设备",
+    "connectedDeviceOne": "1 个已连接设备",
+    "connectedDevices": "{{count}} 个已连接设备",
+    "liveConnection": "在线连接"
   },
   "search": "搜索",
   "status.active": "活跃",

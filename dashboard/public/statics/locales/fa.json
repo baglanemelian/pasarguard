@@ -1676,7 +1676,11 @@
     "errorLoading": "بارگیری آدرس‌های IP ناموفق بود: {{message}}",
     "noIPs": "هیچ آدرس IP فعالی یافت نشد. این کاربر ممکن است در حال حاضر به هیچ گره‌ای متصل نباشد.",
     "ipCopied": "آدرس IP در کلیپ‌بورد کپی شد",
-    "clickToCopy": "کلیک کنید تا آدرس IP کپی شود"
+    "clickToCopy": "کلیک کنید تا آدرس IP کپی شود",
+    "connectedDevice": "دستگاه متصل",
+    "connectedDeviceOne": "1 دستگاه متصل",
+    "connectedDevices": "{{count}} دستگاه متصل",
+    "liveConnection": "اتصال فعال"
   },
   "search": "جستجو",
   "status.active": "فعال",

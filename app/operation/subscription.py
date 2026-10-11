@@ -443,6 +443,11 @@ class SubscriptionOperation(BaseOperation):
         is_browser_request = "text/html" in accept_header
         is_subscription_page_request = is_browser_request and not sub_settings.disable_sub_template
         if is_subscription_page_request:
+            if ip and str(ip).strip():
+                clean_ip = str(ip).strip()
+                if clean_ip.lower() not in {"127.0.0.1", "::1", "localhost", "0.0.0.0", "unknown"}:
+                    await user_sub_update(db, db_user.id, user_agent, ip=clean_ip, hwid=x_hwid)
+
             is_hwid_enabled = await self.is_user_hwid_enabled(db_user)
             template = (
                 db_user.admin.sub_template

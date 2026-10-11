@@ -53,12 +53,21 @@ const NodeIPCard = React.memo(({ nodeId, nodeName, ips }: NodeIPCardProps) => {
           second: '2-digit',
         })
 
-        let ip = rawKey.trim()
+        let ip = ''
         let device = ''
         if (rawKey.includes(' | ')) {
           const parts = rawKey.split(' | ')
           ip = parts[0].trim()
           device = parts.slice(1).join(' | ').trim()
+        } else {
+          const isIpLike = /^(\d{1,3}\.){3}\d{1,3}$/.test(rawKey.trim()) || /^[a-fA-F0-9:]+$/.test(rawKey.trim())
+          if (isIpLike) {
+            ip = rawKey.trim()
+            device = ''
+          } else {
+            device = rawKey.trim()
+            ip = ''
+          }
         }
 
         return { rawKey, ip, device, timestamp: tsNum, timeString }
@@ -81,10 +90,12 @@ const NodeIPCard = React.memo(({ nodeId, nodeName, ips }: NodeIPCardProps) => {
             </span>
           </CardTitle>
           <Badge dir={dir} variant="secondary" className="text-xs px-2 py-0.5 font-medium">
-            {t('userAllIPs.connectedDevices', {
-              defaultValue: totalIPs === 1 ? '1 Connected Device' : '{{count}} Connected Devices',
-              count: totalIPs,
-            })}
+            {totalIPs === 1
+              ? t('userAllIPs.connectedDeviceOne', { defaultValue: '1 Connected Device' })
+              : t('userAllIPs.connectedDevices', {
+                  defaultValue: '{{count}} Connected Devices',
+                  count: totalIPs,
+                })}
           </Badge>
         </div>
       </CardHeader>
@@ -98,25 +109,30 @@ const NodeIPCard = React.memo(({ nodeId, nodeName, ips }: NodeIPCardProps) => {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex flex-col gap-1 min-w-0 flex-1">
-                    {device ? (
-                      <div className="text-sm font-semibold text-foreground truncate" title={device}>
-                        {device}
-                      </div>
-                    ) : (
-                      <div className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-                        <span>📱</span>
-                        <span>{t('userAllIPs.connectedDevice', { defaultValue: 'Connected Device' })}</span>
-                      </div>
-                    )}
+                    <div className="text-sm font-semibold text-foreground truncate" title={device || t('userAllIPs.connectedDevice', { defaultValue: 'Connected Device' })}>
+                      {device ? device : (
+                        <span className="flex items-center gap-1.5">
+                          <span>📱</span>
+                          <span>{t('userAllIPs.connectedDevice', { defaultValue: 'Connected Device' })}</span>
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2">
-                      <span
-                        className="font-mono text-xs text-primary/90 hover:text-primary hover:underline cursor-pointer font-medium select-all transition-colors"
-                        dir="ltr"
-                        onClick={() => handleCopyIP(ip)}
-                        title={t('userAllIPs.clickToCopy', { defaultValue: 'Click to copy IP address' })}
-                      >
-                        {ip}
-                      </span>
+                      {ip && ip !== 'Active' ? (
+                        <span
+                          className="font-mono text-xs text-primary/90 hover:text-primary hover:underline cursor-pointer font-medium select-all transition-colors"
+                          dir="ltr"
+                          onClick={() => handleCopyIP(ip)}
+                          title={t('userAllIPs.clickToCopy', { defaultValue: 'Click to copy IP address' })}
+                        >
+                          {ip}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-emerald-500 font-mono font-medium flex items-center gap-1">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block"></span>
+                          <span>{t('userAllIPs.liveConnection', { defaultValue: 'Active Connection' })}</span>
+                        </span>
+                      )}
                     </div>
                   </div>
                   <span className="relative flex h-2 w-2 mt-1 shrink-0">
