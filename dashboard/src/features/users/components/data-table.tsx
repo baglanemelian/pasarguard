@@ -148,6 +148,7 @@ function useTableOverlayScrollbar() {
 }
 
 const ExpandedRowContent = memo(({ row }: { row: { original: UserResponse } }) => (
+  <div className="flex flex-col gap-y-4 border-b p-4">
     <UsageSliderCompact
       isMobile
       status={row.original.status}
