@@ -1134,11 +1134,18 @@ class NodeOperation(BaseOperation):
 
     @staticmethod
     async def _get_known_proxy_ports(db: AsyncSession) -> set[int]:
-        """Collect all proxy inbound ports from ProxyHost and CoreConfig tables."""
+        """Collect all proxy inbound ports from ProxyHost, CoreConfig, and Node tables."""
         ports: set[int] = set()
         try:
             h_res = await db.execute(select(ProxyHost.port).where(ProxyHost.port.isnot(None)))
             for p in h_res.scalars().all():
+                if p and 0 < int(p) < 65536:
+                    ports.add(int(p))
+        except Exception:
+            pass
+        try:
+            n_res = await db.execute(select(Node.port).where(Node.port.isnot(None)))
+            for p in n_res.scalars().all():
                 if p and 0 < int(p) < 65536:
                     ports.add(int(p))
         except Exception:
@@ -1179,20 +1186,26 @@ class NodeOperation(BaseOperation):
             return ""
 
     @classmethod
-    def _get_live_proxy_client_ips(
+    def _get_live_proxy_clients(
         cls,
         proxy_ports: set[int] | None = None,
         server_ips: set[str] | None = None,
-    ) -> list[str]:
+    ) -> tuple[list[str], list[tuple[str, int]]]:
         """
         Dynamically scan Linux kernel TCP connection tables (/proc/net/tcp, /proc/net/tcp6)
-        and ss for real remote client IP addresses currently connected to proxy ports.
+        and ss for real remote client IP addresses and sockets currently connected to proxy ports.
         Never returns loopback or server/host IPs.
+
+        Returns:
+            - client_ips: list of unique remote client IPs (in order of discovery)
+            - client_sockets: list of (client_ip, remote_port) for all established client connections
         """
         server_ips_lower = {ip.lower() for ip in (server_ips or set())}
         loopback_ips = {"127.0.0.1", "::1", "localhost", "0.0.0.0"}
         client_ips: list[str] = []
-        seen: set[str] = set()
+        client_sockets: list[tuple[str, int]] = []
+        seen_ips: set[str] = set()
+        seen_sockets: set[tuple[str, int]] = set()
 
         def _is_valid_client_ip(ip: str) -> bool:
             if not ip:
@@ -1236,19 +1249,29 @@ class NodeOperation(BaseOperation):
                             continue
 
                     rem_hex_ip = rem_addr.split(":")[0]
+                    try:
+                        rem_port = int(rem_addr.split(":")[1], 16)
+                    except Exception:
+                        rem_port = 0
+
                     if is_v6:
                         rem_ip = cls._hex_to_ipv6(rem_hex_ip)
                     else:
                         rem_ip = cls._hex_to_ipv4(rem_hex_ip)
 
-                    if _is_valid_client_ip(rem_ip) and rem_ip not in seen:
-                        seen.add(rem_ip)
-                        client_ips.append(rem_ip)
+                    if _is_valid_client_ip(rem_ip):
+                        sock_tuple = (rem_ip, rem_port)
+                        if sock_tuple not in seen_sockets:
+                            seen_sockets.add(sock_tuple)
+                            client_sockets.append(sock_tuple)
+                        if rem_ip not in seen_ips:
+                            seen_ips.add(rem_ip)
+                            client_ips.append(rem_ip)
             except Exception as e:
                 logger.debug(f"Error reading {path}: {e}")
 
-        # 2. Fallback: ss command if /proc/net was empty or unavailable
-        if not client_ips and os.name != "nt":
+        # 2. Supplementary scan via ss command if available on Linux
+        if os.name != "nt":
             try:
                 res = subprocess.run(
                     ["ss", "-t", "-H", "-n", "state", "established"],
@@ -1269,13 +1292,31 @@ class NodeOperation(BaseOperation):
                             if proxy_ports and l_port not in proxy_ports:
                                 continue
                             peer_ip = peer_col.rsplit(":", 1)[0].strip("[]")
-                            if _is_valid_client_ip(peer_ip) and peer_ip not in seen:
-                                seen.add(peer_ip)
-                                client_ips.append(peer_ip)
+                            try:
+                                peer_port = int(peer_col.rsplit(":", 1)[-1])
+                            except Exception:
+                                peer_port = 0
+                            if _is_valid_client_ip(peer_ip):
+                                sock_tuple = (peer_ip, peer_port)
+                                if sock_tuple not in seen_sockets:
+                                    seen_sockets.add(sock_tuple)
+                                    client_sockets.append(sock_tuple)
+                                if peer_ip not in seen_ips:
+                                    seen_ips.add(peer_ip)
+                                    client_ips.append(peer_ip)
             except Exception:
                 pass
 
-        return client_ips
+        return client_ips, client_sockets
+
+    @classmethod
+    def _get_live_proxy_client_ips(
+        cls,
+        proxy_ports: set[int] | None = None,
+        server_ips: set[str] | None = None,
+    ) -> list[str]:
+        ips, _ = cls._get_live_proxy_clients(proxy_ports, server_ips)
+        return ips
 
     @staticmethod
     async def _resolve_user_devices(
@@ -1288,11 +1329,18 @@ class NodeOperation(BaseOperation):
             each dict: {"ip": client_ip, "device": dev_label, "created_at": s_created}
           - fallback_sub_ips: list of all valid client IPs found in subscription history
         """
+        try:
+            from app.subscription.sub_update_buffer import flush_user_sub_updates
+            await flush_user_sub_updates()
+        except Exception:
+            pass
+
         hwid_details: dict[str, dict] = {}
         try:
             hw_res = await db.execute(
                 select(UserHWID.hwid, UserHWID.device_os, UserHWID.os_version, UserHWID.device_model)
                 .where(UserHWID.user_id == db_user.id)
+                .order_by(UserHWID.last_used_at.desc())
             )
             for row in hw_res.all():
                 if row[0]:
@@ -1412,17 +1460,23 @@ class NodeOperation(BaseOperation):
                 if ip in ip_to_device:
                     dev = ip_to_device[ip]
                     assigned_devices.add(dev)
-                    formatted_ips[f"{ip} | {dev}"] = ts
+                    key = f"{ip} | {dev}"
+                    if key in formatted_ips:
+                        key = f"{key} (2)"
+                    formatted_ips[key] = ts
                 else:
                     unmatched_ips.append((ip, ts))
 
             available_devices = [s["device"] for s in distinct_sessions if s["device"] not in assigned_devices]
-            for ip, ts in unmatched_ips:
+            for idx_un, (ip, ts) in enumerate(unmatched_ips):
                 if available_devices:
                     dev = available_devices.pop(0)
                 else:
                     dev = "📱 Connected Device"
-                formatted_ips[f"{ip} | {dev}"] = ts
+                key = f"{ip} | {dev}"
+                if key in formatted_ips:
+                    key = f"{key} ({idx_un + 2})"
+                formatted_ips[key] = ts
 
             return UserIPList(ips=formatted_ips)
 
@@ -1447,11 +1501,26 @@ class NodeOperation(BaseOperation):
 
         ip_to_device, distinct_sessions, fallback_sub_ips = await self._resolve_user_devices(db, db_user, server_ips)
         proxy_ports = await self._get_known_proxy_ports(db)
-        live_client_ips = self._get_live_proxy_client_ips(proxy_ports, server_ips)
-        avail_live = list(live_client_ips)
+        live_client_ips, live_client_sockets = self._get_live_proxy_clients(proxy_ports, server_ips)
+        total_live_ips = len(live_client_ips)
+        total_live_sockets = len(live_client_sockets)
 
+        # On Linux, if kernel tables report 0 connections to proxy ports, user is truly disconnected
+        if os.name != "nt" and total_live_sockets == 0 and total_live_ips == 0:
+            return UserIPList(ips={})
+
+        # Calculate effective active devices for this user (supports multiple devices on distinct IPs or same Wi-Fi/NAT)
+        if total_live_ips > effective_count:
+            effective_count = total_live_ips
+        if len(distinct_sessions) > 1 and total_live_sockets > 1:
+            effective_count = max(effective_count, min(len(distinct_sessions), total_live_sockets))
+        elif total_live_sockets > 1 and total_live_sockets > effective_count:
+            effective_count = max(effective_count, min(total_live_sockets, max(len(distinct_sessions), 2)))
+
+        avail_live = list(live_client_ips)
         formatted_ips: dict[str, int] = {}
         for idx in range(effective_count):
+            slot = idx + 1
             if idx < len(distinct_sessions):
                 sess = distinct_sessions[idx]
                 s_ip = sess.get("ip") or ""
@@ -1462,13 +1531,20 @@ class NodeOperation(BaseOperation):
                     avail_live.remove(s_ip)
                 if not s_ip and avail_live:
                     s_ip = avail_live.pop(0)
+                if not s_ip and fallback_sub_ips:
+                    s_ip = fallback_sub_ips[0]
+                if not s_ip and live_client_ips:
+                    s_ip = live_client_ips[0]
                 key = f"{s_ip} | {s_dev}" if s_ip else f"Active | {s_dev}"
+                if key in formatted_ips:
+                    key = f"{key} ({slot})"
                 formatted_ips[key] = now_ts
             else:
-                slot = idx + 1
-                s_ip = avail_live.pop(0) if avail_live else (fallback_sub_ips[0] if fallback_sub_ips else "")
+                s_ip = avail_live.pop(0) if avail_live else (fallback_sub_ips[0] if fallback_sub_ips else (live_client_ips[0] if live_client_ips else ""))
                 s_dev = f"📱 Connected Device #{slot}"
                 key = f"{s_ip} | {s_dev}" if s_ip else f"Active | {s_dev}"
+                if key in formatted_ips:
+                    key = f"{key} ({slot})"
                 formatted_ips[key] = now_ts
 
         return UserIPList(ips=formatted_ips)
@@ -1526,17 +1602,23 @@ class NodeOperation(BaseOperation):
                     if ip in ip_to_device:
                         dev = ip_to_device[ip]
                         assigned_devices.add(dev)
-                        node_formatted_ips[node_id][f"{ip} | {dev}"] = ts
+                        key = f"{ip} | {dev}"
+                        if key in node_formatted_ips[node_id]:
+                            key = f"{key} (2)"
+                        node_formatted_ips[node_id][key] = ts
                     else:
                         unmatched_entries.append((node_id, ip, ts))
 
             available_devices = [s["device"] for s in distinct_sessions if s["device"] not in assigned_devices]
-            for node_id, ip, ts in unmatched_entries:
+            for idx_un, (node_id, ip, ts) in enumerate(unmatched_entries):
                 if available_devices:
                     dev = available_devices.pop(0)
                 else:
                     dev = "📱 Connected Device"
-                node_formatted_ips[node_id][f"{ip} | {dev}"] = ts
+                key = f"{ip} | {dev}"
+                if key in node_formatted_ips[node_id]:
+                    key = f"{key} ({idx_un + 2})"
+                node_formatted_ips[node_id][key] = ts
 
             for node_id, f_ips in node_formatted_ips.items():
                 if f_ips:
@@ -1575,37 +1657,58 @@ class NodeOperation(BaseOperation):
         if not active_nodes_with_count:
             return UserIPListAll(nodes={})
 
-        # Dynamically scan kernel sockets for live remote proxy client IPs
+        # Dynamically scan kernel sockets for live remote proxy client IPs and sockets
         proxy_ports = await self._get_known_proxy_ports(db)
-        live_client_ips = self._get_live_proxy_client_ips(proxy_ports, server_ips)
-        avail_live = list(live_client_ips)
+        live_client_ips, live_client_sockets = self._get_live_proxy_clients(proxy_ports, server_ips)
+        total_live_ips = len(live_client_ips)
+        total_live_sockets = len(live_client_sockets)
+
+        # On Linux, if kernel tables report 0 connections to proxy ports, user is truly disconnected
+        if os.name != "nt" and total_live_sockets == 0 and total_live_ips == 0:
+            return UserIPListAll(nodes={})
 
         # Synthesize active device sessions for each active node
         results = {}
         session_index = 0
         for node_id, count in active_nodes_with_count:
+            effective_device_count = count
+            if total_live_ips > effective_device_count:
+                effective_device_count = total_live_ips
+            if len(distinct_sessions) > 1 and total_live_sockets > 1:
+                effective_device_count = max(effective_device_count, min(len(distinct_sessions), total_live_sockets))
+            elif total_live_sockets > 1 and total_live_sockets > effective_device_count:
+                effective_device_count = max(effective_device_count, min(total_live_sockets, max(len(distinct_sessions), 2)))
+
+            avail_live = list(live_client_ips)
             node_ips: dict[str, int] = {}
-            for _ in range(count):
+            for idx in range(effective_device_count):
+                slot = idx + 1
                 if session_index < len(distinct_sessions):
                     sess = distinct_sessions[session_index]
                     session_index += 1
                     s_ip = sess.get("ip") or ""
                     s_dev = sess.get("device") or "📱 Connected Device"
-                    # If live socket IP is available and user's session didn't have an IP, bind it!
                     if not s_ip and avail_live:
                         s_ip = avail_live.pop(0)
                     elif s_ip and s_ip in avail_live:
                         avail_live.remove(s_ip)
                     if not s_ip and avail_live:
                         s_ip = avail_live.pop(0)
+                    if not s_ip and fallback_sub_ips:
+                        s_ip = fallback_sub_ips[0]
+                    if not s_ip and live_client_ips:
+                        s_ip = live_client_ips[0]
                     key = f"{s_ip} | {s_dev}" if s_ip else f"Active | {s_dev}"
+                    if key in node_ips:
+                        key = f"{key} ({slot})"
                     node_ips[key] = now_ts
                 else:
-                    slot = session_index + 1
                     session_index += 1
-                    s_ip = avail_live.pop(0) if avail_live else (fallback_sub_ips[0] if fallback_sub_ips else "")
+                    s_ip = avail_live.pop(0) if avail_live else (fallback_sub_ips[0] if fallback_sub_ips else (live_client_ips[0] if live_client_ips else ""))
                     s_dev = f"📱 Connected Device #{slot}"
                     key = f"{s_ip} | {s_dev}" if s_ip else f"Active | {s_dev}"
+                    if key in node_ips:
+                        key = f"{key} ({slot})"
                     node_ips[key] = now_ts
 
             if node_ips:
