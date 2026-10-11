@@ -695,6 +695,21 @@ class NodeOperation(BaseOperation):
             logger.debug(f"Error reading IP list for user {email} on node {node_id}: {e}")
             return None
 
+    async def _get_node_user_online_count_safe(self, node_id: int, email: str) -> int | None:
+        """Wrapper method that returns active socket count or None on communication error."""
+        try:
+            node = await node_manager.get_node(node_id)
+            if node is None:
+                return None
+
+            stats = await node.get_user_online_stats(email=email)
+            if stats is not None and hasattr(stats, "value"):
+                return max(0, int(stats.value))
+            return None
+        except Exception as e:
+            logger.debug(f"Error checking online stats for user {email} on node {node_id}: {e}")
+            return None
+
     async def sync_node_users(self, db: AsyncSession, node_id: int, flush_users: bool = False) -> NodeResponse:
         return await self._sync_node_users_impl(db, node_id, flush_users)
 
@@ -1117,11 +1132,12 @@ class NodeOperation(BaseOperation):
     @staticmethod
     async def _resolve_user_devices(
         db: AsyncSession, db_user: User, server_ips: set[str]
-    ) -> tuple[dict[str, str], list[str]]:
+    ) -> tuple[dict[str, str], list[dict]]:
         """
         Returns:
           - ip_to_device: mapping of client_ip -> human-readable device string
-          - known_devices: ordered list of distinct device strings seen for this user (most recent first)
+          - distinct_sessions: ordered list of distinct client sessions (most recent first)
+            each dict: {"ip": client_ip, "device": dev_label, "created_at": s_created}
         """
         hwid_details: dict[str, dict] = {}
         try:
@@ -1160,8 +1176,8 @@ class NodeOperation(BaseOperation):
             logger.debug(f"Error reading UserSubscriptionUpdate for user {db_user.id}: {e}")
 
         ip_to_device: dict[str, str] = {}
-        seen_devices: set[str] = set()
-        known_devices: list[str] = []
+        distinct_sessions: list[dict] = []
+        seen_session_keys: set[str] = set()
 
         for s_ip, s_ua, s_hw, s_created in sub_records:
             hw_data = hwid_details.get(s_hw, {})
@@ -1172,18 +1188,26 @@ class NodeOperation(BaseOperation):
                 os_version=hw_data.get("os_version"),
                 device_model=hw_data.get("device_model"),
             )
-            if dev_label and dev_label not in seen_devices:
-                seen_devices.add(dev_label)
-                known_devices.append(dev_label)
-
+            client_ip = ""
             if s_ip:
-                client_ip = str(s_ip).strip()
+                clean_ip = str(s_ip).strip()
                 if (
-                    client_ip.lower() not in server_ips
-                    and client_ip.lower() not in {"127.0.0.1", "::1", "localhost", "0.0.0.0"}
+                    clean_ip.lower() not in server_ips
+                    and clean_ip.lower() not in {"127.0.0.1", "::1", "localhost", "0.0.0.0"}
                 ):
-                    if client_ip not in ip_to_device and dev_label:
-                        ip_to_device[client_ip] = dev_label
+                    client_ip = clean_ip
+
+            if client_ip and dev_label and client_ip not in ip_to_device:
+                ip_to_device[client_ip] = dev_label
+
+            sess_key = f"{client_ip}___{dev_label}" if (client_ip and dev_label) else (dev_label or client_ip)
+            if sess_key and sess_key not in seen_session_keys:
+                seen_session_keys.add(sess_key)
+                distinct_sessions.append({
+                    "ip": client_ip,
+                    "device": dev_label or "📱 Connected Device",
+                    "created_at": s_created,
+                })
 
         for hw_hwid, hw_data in hwid_details.items():
             dev_label = parse_device_info(
@@ -1192,11 +1216,15 @@ class NodeOperation(BaseOperation):
                 os_version=hw_data.get("os_version"),
                 device_model=hw_data.get("device_model"),
             )
-            if dev_label and dev_label not in seen_devices:
-                seen_devices.add(dev_label)
-                known_devices.append(dev_label)
+            if dev_label and dev_label not in seen_session_keys:
+                seen_session_keys.add(dev_label)
+                distinct_sessions.append({
+                    "ip": "",
+                    "device": dev_label,
+                    "created_at": None,
+                })
 
-        return ip_to_device, known_devices
+        return ip_to_device, distinct_sessions
 
     async def _get_user_ip_list_local(self, db: AsyncSession, node_id: int, user_id: int) -> UserIPList:
         db_user = await get_user_by_id(db, user_id)
@@ -1206,32 +1234,68 @@ class NodeOperation(BaseOperation):
         server_ips = await self._get_known_server_ips(db)
         email = f"{db_user.id}"
         raw_ips = await self._get_node_user_ip_list_safe(node_id, email, server_ips)
+        online_count = await self._get_node_user_online_count_safe(node_id, email)
 
-        if not raw_ips:
-            # Strictly return empty when no active connections exist on this node
+        now_utc = dt.now(UTC)
+        now_ts = int(now_utc.timestamp())
+
+        # If raw_ips exists and is non-empty, use it directly
+        if raw_ips:
+            ip_to_device, distinct_sessions = await self._resolve_user_devices(db, db_user, server_ips)
+            formatted_ips: dict[str, int] = {}
+            assigned_devices: set[str] = set()
+            unmatched_ips: list[tuple[str, int]] = []
+
+            for ip, ts in raw_ips.items():
+                if ip in ip_to_device:
+                    dev = ip_to_device[ip]
+                    assigned_devices.add(dev)
+                    formatted_ips[f"{ip} | {dev}"] = ts
+                else:
+                    unmatched_ips.append((ip, ts))
+
+            available_devices = [s["device"] for s in distinct_sessions if s["device"] not in assigned_devices]
+            for ip, ts in unmatched_ips:
+                if available_devices:
+                    dev = available_devices.pop(0)
+                else:
+                    dev = "📱 Connected Device"
+                formatted_ips[f"{ip} | {dev}"] = ts
+
+            return UserIPList(ips=formatted_ips)
+
+        # Fallback when raw_ips is empty (e.g. Xray without access log)
+        # If node reported 0 sockets explicitly, user is strictly disconnected on this node!
+        if online_count == 0:
             return UserIPList(ips={})
 
-        ip_to_device, known_devices = await self._resolve_user_devices(db, db_user, server_ips)
+        # If node communication failed, check db_user.online_at within 45s
+        effective_count = 0
+        if online_count is not None and online_count > 0:
+            effective_count = online_count
+        elif online_count is None:
+            user_online_at = db_user.online_at
+            if user_online_at:
+                if user_online_at.tzinfo is None:
+                    user_online_at = user_online_at.replace(tzinfo=UTC)
+                if (now_utc - user_online_at).total_seconds() <= 45:
+                    effective_count = 1
 
+        if effective_count <= 0:
+            return UserIPList(ips={})
+
+        ip_to_device, distinct_sessions = await self._resolve_user_devices(db, db_user, server_ips)
         formatted_ips: dict[str, int] = {}
-        assigned_devices: set[str] = set()
 
-        unmatched_ips: list[tuple[str, int]] = []
-        for ip, ts in raw_ips.items():
-            if ip in ip_to_device:
-                dev = ip_to_device[ip]
-                assigned_devices.add(dev)
-                formatted_ips[f"{ip} | {dev}"] = ts
+        for idx in range(effective_count):
+            if idx < len(distinct_sessions):
+                sess = distinct_sessions[idx]
+                s_ip = sess.get("ip") or ""
+                s_dev = sess.get("device") or "📱 Connected Device"
+                key = f"{s_ip} | {s_dev}" if s_ip else s_dev
+                formatted_ips[key] = now_ts
             else:
-                unmatched_ips.append((ip, ts))
-
-        available_devices = [d for d in known_devices if d not in assigned_devices]
-        for ip, ts in unmatched_ips:
-            if available_devices:
-                dev = available_devices.pop(0)
-            else:
-                dev = "📱 Connected Device"
-            formatted_ips[f"{ip} | {dev}"] = ts
+                formatted_ips[f"📱 Connected Device #{idx + 1}"] = now_ts
 
         return UserIPList(ips=formatted_ips)
 
@@ -1255,48 +1319,108 @@ class NodeOperation(BaseOperation):
             id: asyncio.create_task(self._get_node_user_ip_list_safe(id, email, server_ips))
             for id, _ in nodes
         }
-        await asyncio.gather(*ip_list_tasks.values(), return_exceptions=True)
+        online_stats_tasks = {
+            id: asyncio.create_task(self._get_node_user_online_count_safe(id, email))
+            for id, _ in nodes
+        }
+
+        await asyncio.gather(*ip_list_tasks.values(), *online_stats_tasks.values(), return_exceptions=True)
 
         node_raw_ips: dict[int, dict[str, int]] = {}
         for node_id, task in ip_list_tasks.items():
-            if task.exception() or task.result() is None:
-                continue
-            raw_node_ips = task.result()
-            if raw_node_ips:
-                node_raw_ips[node_id] = raw_node_ips
+            if not task.exception() and task.result():
+                node_raw_ips[node_id] = task.result()
 
-        if not node_raw_ips:
-            # Strictly return empty when no active connections exist on any node
+        node_online_counts: dict[int, int | None] = {}
+        for node_id, task in online_stats_tasks.items():
+            if not task.exception():
+                node_online_counts[node_id] = task.result()
+            else:
+                node_online_counts[node_id] = None
+
+        ip_to_device, distinct_sessions = await self._resolve_user_devices(db, db_user, server_ips)
+
+        # Case A: We got raw IPs directly from at least one node
+        if node_raw_ips:
+            results: dict[int, UserIPList] = {}
+            assigned_devices: set[str] = set()
+            unmatched_entries: list[tuple[int, str, int]] = []
+            node_formatted_ips: dict[int, dict[str, int]] = {nid: {} for nid in node_raw_ips}
+
+            for node_id, raw_ips in node_raw_ips.items():
+                for ip, ts in raw_ips.items():
+                    if ip in ip_to_device:
+                        dev = ip_to_device[ip]
+                        assigned_devices.add(dev)
+                        node_formatted_ips[node_id][f"{ip} | {dev}"] = ts
+                    else:
+                        unmatched_entries.append((node_id, ip, ts))
+
+            available_devices = [s["device"] for s in distinct_sessions if s["device"] not in assigned_devices]
+            for node_id, ip, ts in unmatched_entries:
+                if available_devices:
+                    dev = available_devices.pop(0)
+                else:
+                    dev = "📱 Connected Device"
+                node_formatted_ips[node_id][f"{ip} | {dev}"] = ts
+
+            for node_id, f_ips in node_formatted_ips.items():
+                if f_ips:
+                    results[node_id] = UserIPList(ips=f_ips)
+
+            return UserIPListAll(nodes=results)
+
+        # Case B: node_raw_ips is empty (standard Xray without access logging).
+        # Check active socket counts reported by healthy nodes.
+        now_utc = dt.now(UTC)
+        now_ts = int(now_utc.timestamp())
+
+        active_nodes_with_count: list[tuple[int, int]] = []
+        any_node_responded = False
+
+        for node_id, count in node_online_counts.items():
+            if count is not None:
+                any_node_responded = True
+                if count > 0:
+                    active_nodes_with_count.append((node_id, count))
+
+        # If healthy nodes responded and all reported 0 sockets, the user is STRICTLY OFFLINE!
+        # (This guarantees immediate 0 count when user closes VPN).
+        if any_node_responded and not active_nodes_with_count:
             return UserIPListAll(nodes={})
 
-        ip_to_device, known_devices = await self._resolve_user_devices(db, db_user, server_ips)
+        # If no node answered (communication error), fallback to recent traffic in DB within 45s
+        if not any_node_responded and nodes:
+            user_online_at = db_user.online_at
+            if user_online_at:
+                if user_online_at.tzinfo is None:
+                    user_online_at = user_online_at.replace(tzinfo=UTC)
+                if (now_utc - user_online_at).total_seconds() <= 45:
+                    active_nodes_with_count.append((nodes[0][0], 1))
 
-        results: dict[int, UserIPList] = {}
-        assigned_devices: set[str] = set()
+        if not active_nodes_with_count:
+            return UserIPListAll(nodes={})
 
-        unmatched_entries: list[tuple[int, str, int]] = []
-        node_formatted_ips: dict[int, dict[str, int]] = {nid: {} for nid in node_raw_ips}
-
-        for node_id, raw_ips in node_raw_ips.items():
-            for ip, ts in raw_ips.items():
-                if ip in ip_to_device:
-                    dev = ip_to_device[ip]
-                    assigned_devices.add(dev)
-                    node_formatted_ips[node_id][f"{ip} | {dev}"] = ts
+        # Synthesize active device sessions for each active node
+        results = {}
+        session_index = 0
+        for node_id, count in active_nodes_with_count:
+            node_ips: dict[str, int] = {}
+            for _ in range(count):
+                if session_index < len(distinct_sessions):
+                    sess = distinct_sessions[session_index]
+                    session_index += 1
+                    s_ip = sess.get("ip") or ""
+                    s_dev = sess.get("device") or "📱 Connected Device"
+                    key = f"{s_ip} | {s_dev}" if s_ip else s_dev
+                    node_ips[key] = now_ts
                 else:
-                    unmatched_entries.append((node_id, ip, ts))
+                    slot = session_index + 1
+                    session_index += 1
+                    node_ips[f"📱 Connected Device #{slot}"] = now_ts
 
-        available_devices = [d for d in known_devices if d not in assigned_devices]
-        for node_id, ip, ts in unmatched_entries:
-            if available_devices:
-                dev = available_devices.pop(0)
-            else:
-                dev = "📱 Connected Device"
-            node_formatted_ips[node_id][f"{ip} | {dev}"] = ts
-
-        for node_id, f_ips in node_formatted_ips.items():
-            if f_ips:
-                results[node_id] = UserIPList(ips=f_ips)
+            if node_ips:
+                results[node_id] = UserIPList(ips=node_ips)
 
         return UserIPListAll(nodes=results)
 

@@ -41,6 +41,7 @@ async def check_user_ip_limits_job():
                 try:
                     ip_list_all = await node_operator.get_user_ip_list_all_nodes(db=db, user_id=user.id)
                     active_ips: set[str] = set()
+                    active_devices: set[str] = set()
 
                     if ip_list_all and ip_list_all.nodes:
                         for node_id, node_ips in ip_list_all.nodes.items():
@@ -49,8 +50,10 @@ async def check_user_ip_limits_job():
                                     pure_ip = key.split(" | ")[0].strip().lower() if " | " in key else key.strip().lower()
                                     if pure_ip and pure_ip not in server_ips and pure_ip not in loopback_ips:
                                         active_ips.add(pure_ip)
+                                    active_devices.add(key)
 
-                    ip_count = len(active_ips)
+                    # Total active concurrent devices/connections
+                    ip_count = max(len(active_ips), len(active_devices))
                     max_allowed = user.uuid_limit
 
                     if ip_count > max_allowed:
