@@ -14,6 +14,7 @@ type UsageSliderProps = {
   isMobile?: boolean
   userId?: number
   uuidLimit?: number | null
+  lastOnline?: string | null
 }
 
 const UsageSliderCompact: React.FC<UsageSliderProps> = ({
@@ -24,6 +25,7 @@ const UsageSliderCompact: React.FC<UsageSliderProps> = ({
   isMobile,
   userId,
   uuidLimit,
+  lastOnline,
 }) => {
   const isUnlimited = total === 0 || total === null
   const progressValue = isUnlimited ? 100 : (used / total) * 100
@@ -40,7 +42,7 @@ const UsageSliderCompact: React.FC<UsageSliderProps> = ({
         </span>
         <div className={cn(isMobile ? 'flex items-center gap-1.5' : 'hidden md:flex md:items-center md:gap-1.5', 'leading-tight')}>
           <span>{t('usersTable.total')}:</span> <span dir="ltr">{formatBytes(totalUsedTraffic || 0)}</span>
-          <UserLiveOnlineCount userId={userId} uuidLimit={uuidLimit} />
+          <UserLiveOnlineCount userId={userId} uuidLimit={uuidLimit} lastOnline={lastOnline} />
         </div>
       </div>
     </div>

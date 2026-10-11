@@ -262,11 +262,19 @@ export default function UserAllIPsModal({ isOpen, onOpenChange, userId, username
     if (userIPsData.nodes && typeof userIPsData.nodes === 'object') {
       Object.entries(userIPsData.nodes).forEach(([nodeId, ipList]) => {
         if (ipList && ipList.ips && typeof ipList.ips === 'object') {
-          nodes.push({
-            nodeId,
-            nodeName: nodeNameMap[nodeId] || nodeId,
-            ips: ipList.ips,
+          const validIps: { [key: string]: number } = {}
+          Object.entries(ipList.ips).forEach(([ip, ts]) => {
+            if (ip && !['127.0.0.1', '::1', 'localhost'].includes(ip.toLowerCase())) {
+              validIps[ip] = ts
+            }
           })
+          if (Object.keys(validIps).length > 0) {
+            nodes.push({
+              nodeId,
+              nodeName: nodeNameMap[nodeId] || nodeId,
+              ips: validIps,
+            })
+          }
         }
       })
     }

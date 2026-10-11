@@ -235,6 +235,7 @@ export const setupColumns = ({
           status={row.original.status}
           userId={row.original.id}
           uuidLimit={(row.original as any).uuid_limit}
+          lastOnline={row.original.online_at}
         />
         <div className="hidden w-[215px] px-2 py-1 md:block">
           <ActionButtons user={row.original} isModalHost={false} />

@@ -4,9 +4,10 @@ import { useUserOnlineIpListAllNodes } from '@/service/api'
 interface UserLiveOnlineCountProps {
   userId?: number
   uuidLimit?: number | null
+  lastOnline?: string | null
 }
 
-export const UserLiveOnlineCount: React.FC<UserLiveOnlineCountProps> = ({ userId, uuidLimit }) => {
+export const UserLiveOnlineCount: React.FC<UserLiveOnlineCountProps> = ({ userId, uuidLimit, lastOnline }) => {
   if (!userId) return null
 
   const { data } = useUserOnlineIpListAllNodes(userId, {
@@ -20,16 +21,37 @@ export const UserLiveOnlineCount: React.FC<UserLiveOnlineCountProps> = ({ userId
     },
   })
 
-  const onlineCount = useMemo(() => {
+  // Check if user was online in the last 90 seconds from traffic logs / database
+  const isRecentlyActive = useMemo(() => {
+    if (!lastOnline) return false
+    const now = Date.now()
+    const last = new Date(lastOnline).getTime()
+    return !isNaN(last) && now - last <= 90 * 1000
+  }, [lastOnline])
+
+  // Count active IPs from node real-time responses
+  const detectedCount = useMemo(() => {
     if (!data?.nodes || typeof data.nodes !== 'object') return 0
     const ips = new Set<string>()
     Object.values(data.nodes).forEach((node: any) => {
       if (node?.ips && typeof node.ips === 'object') {
-        Object.keys(node.ips).forEach(ip => ips.add(ip))
+        Object.keys(node.ips).forEach(ip => {
+          if (ip && !['127.0.0.1', '::1', 'localhost'].includes(ip.toLowerCase())) {
+            ips.add(ip)
+          }
+        })
       }
     })
     return ips.size
   }, [data])
+
+  // If node query returned detected active IPs, use detectedCount.
+  // If node query returned 0 IPs (e.g. reverse proxy dropped loopback or delay) BUT user has recent online_at traffic, fallback to at least 1 device!
+  const onlineCount = useMemo(() => {
+    if (detectedCount > 0) return detectedCount
+    if (isRecentlyActive) return 1
+    return 0
+  }, [detectedCount, isRecentlyActive])
 
   const [justChanged, setJustChanged] = useState(false)
   const prevCountRef = useRef(onlineCount)
@@ -44,11 +66,26 @@ export const UserLiveOnlineCount: React.FC<UserLiveOnlineCountProps> = ({ userId
   }, [onlineCount])
 
   const isOnline = onlineCount > 0
+  const isOverLimit = !!(uuidLimit && uuidLimit > 0 && onlineCount > uuidLimit)
+
+  const tooltipTitle = useMemo(() => {
+    if (isOverLimit) {
+      return `LİMİT AŞILDI: ${onlineCount} aktif cihaz bağlı (İzin verilen limit: ${uuidLimit})`
+    }
+    if (isOnline) {
+      return `Çevrimiçi: ${onlineCount} aktif cihaz bağlı${uuidLimit ? ` / Limit: ${uuidLimit}` : ''}`
+    }
+    return `Çevrimdışı (Bağlı cihaz yok)${uuidLimit ? ` / Limit: ${uuidLimit}` : ''}`
+  }, [isOverLimit, isOnline, onlineCount, uuidLimit])
 
   return (
     <span
       className={
-        isOnline
+        isOverLimit
+          ? `inline-flex items-center gap-1 rounded-full bg-red-500/15 border border-red-500/40 px-1.5 py-0.5 text-[10px] font-mono font-medium text-red-600 dark:text-red-400 select-none shrink-0 transition-all duration-150 ${
+              justChanged ? 'scale-115 ring-2 ring-red-500/60' : 'scale-100'
+            }`
+          : isOnline
           ? `inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 text-[10px] font-mono font-medium text-emerald-600 dark:text-emerald-400 select-none shrink-0 transition-all duration-150 ${
               justChanged ? 'scale-115 ring-2 ring-emerald-500/60' : 'scale-100'
             }`
@@ -56,23 +93,22 @@ export const UserLiveOnlineCount: React.FC<UserLiveOnlineCountProps> = ({ userId
               justChanged ? 'scale-115' : 'scale-100'
             }`
       }
-      title={
-        isOnline
-          ? `ANLIK CANLI: ${onlineCount} aktif cihaz bağlı${uuidLimit ? ` / Limit: ${uuidLimit}` : ''}`
-          : `ANLIK CANLI: 0 aktif cihaz bağlı${uuidLimit ? ` / Limit: ${uuidLimit}` : ''}`
-      }
+      title={tooltipTitle}
     >
       <span className="relative flex h-2 w-2">
-        {isOnline && (
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+        {isOverLimit ? (
+          <>
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+          </>
+        ) : isOnline ? (
+          <>
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+          </>
+        ) : (
+          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-muted-foreground/40" />
         )}
-        <span
-          className={
-            isOnline
-              ? 'relative inline-flex rounded-full h-2 w-2 bg-emerald-500'
-              : 'relative inline-flex rounded-full h-1.5 w-1.5 bg-muted-foreground/40'
-          }
-        />
       </span>
       <span className="leading-none font-bold">
         {onlineCount}

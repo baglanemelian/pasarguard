@@ -844,3 +844,13 @@ async def bulk_modify_users_proxy_settings(
     _: AdminDetails = Depends(require_scope_all("users", "update")),
 ):
     return await user_operator.bulk_modify_proxy_settings(db, bulk_model)
+
+
+@router.get("s/ip_violations", summary="Get active concurrent IP limit violators")
+async def get_ip_violations(
+    _: AdminDetails = Depends(require_permission("users", "read")),
+):
+    """Retrieve users currently exceeding their concurrent IP limit (uuid_limit)."""
+    from app.jobs.ip_limit_checker import get_current_ip_violations
+
+    return get_current_ip_violations()

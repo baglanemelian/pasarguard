@@ -1,11 +1,13 @@
 import asyncio
 from collections.abc import AsyncIterator, Callable
+from datetime import UTC, datetime as dt
 from typing import ClassVar
 
 from fastapi import HTTPException
 from PasarGuardNodeBridge import Health, NodeAPIError, PasarGuardNode
 from PasarGuardNodeBridge.common import service_pb2 as service
 from PasarGuardNodeBridge.storage import LifecycleStatus
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app import notification
@@ -28,7 +30,7 @@ from app.db.crud.node import (
     update_node_status,
 )
 from app.db.crud.user import get_user_by_id, get_user_count_metric_stats
-from app.db.models import Node, NodeStatus
+from app.db.models import Node, NodeStatus, NodeUserUsage, UserSubscriptionUpdate
 from app.models.admin import AdminDetails
 from app.models.core import CoreType
 from app.models.node import (
@@ -659,7 +661,7 @@ class NodeOperation(BaseOperation):
         return await self._get_user_ip_list_all_impl(db, user_id)
 
     async def _get_node_user_ip_list_safe(self, node_id: int, email: str) -> dict[str, int] | None:
-        """Wrapper method that returns None instead of raising exceptions"""
+        """Wrapper method that returns None instead of raising exceptions, filtering loopback IPs."""
         try:
             node = await node_manager.get_node(node_id)
             if node is None:
@@ -669,10 +671,20 @@ class NodeOperation(BaseOperation):
             if stats is None:
                 return None
 
-            return stats.ips
+            loopback_ips = {"127.0.0.1", "::1", "localhost"}
+            raw_ips = getattr(stats, "ips", None) or {}
+            filtered_ips = {
+                str(ip): int(ts)
+                for ip, ts in dict(raw_ips).items()
+                if str(ip).strip() and str(ip).lower() not in loopback_ips
+            }
+            return filtered_ips
         except NodeAPIError as e:
             if e.code != 404:
                 logger.error(f"Error getting IP list for user {email} on node {node_id}: {e}")
+            return None
+        except Exception as e:
+            logger.debug(f"Error reading IP list for user {email} on node {node_id}: {e}")
             return None
 
     async def sync_node_users(self, db: AsyncSession, node_id: int, flush_users: bool = False) -> NodeResponse:
@@ -1043,9 +1055,35 @@ class NodeOperation(BaseOperation):
 
         email = f"{db_user.id}"
         ips = await self._get_node_user_ip_list_safe(node_id, email)
-
         if ips is None:
-            await self.raise_error(message="Node unavailable or user not found", code=404)
+            ips = {}
+
+        if not ips:
+            now_utc = dt.now(UTC)
+            if db_user.online_at:
+                user_online_at = db_user.online_at if db_user.online_at.tzinfo else db_user.online_at.replace(tzinfo=UTC)
+                if 0 <= (now_utc - user_online_at).total_seconds() <= 180:
+                    client_ip = None
+                    try:
+                        sub_stmt = (
+                            select(UserSubscriptionUpdate.ip)
+                            .where(
+                                UserSubscriptionUpdate.user_id == db_user.id,
+                                UserSubscriptionUpdate.ip.isnot(None),
+                            )
+                            .order_by(UserSubscriptionUpdate.created_at.desc())
+                            .limit(1)
+                        )
+                        sub_res = await db.execute(sub_stmt)
+                        client_ip = sub_res.scalar_one_or_none()
+                    except Exception:
+                        pass
+
+                    loopback_ips = {"127.0.0.1", "::1", "localhost"}
+                    if not client_ip or client_ip.lower() in loopback_ips:
+                        client_ip = "Active Connection"
+                    ts = int(user_online_at.timestamp())
+                    return UserIPList(ips={client_ip: ts})
 
         return UserIPList(ips=ips)
 
@@ -1072,8 +1110,59 @@ class NodeOperation(BaseOperation):
         for node_id, task in ip_list_tasks.items():
             if task.exception() or task.result() is None:
                 continue
-            else:
-                results[node_id] = UserIPList(ips=task.result())
+            ips = task.result()
+            if ips:
+                results[node_id] = UserIPList(ips=ips)
+
+        # Fallback if no direct IPs found from Xray core online_map
+        if not results:
+            now_utc = dt.now(UTC)
+            is_active = False
+            if db_user.online_at:
+                user_online_at = db_user.online_at if db_user.online_at.tzinfo else db_user.online_at.replace(tzinfo=UTC)
+                if 0 <= (now_utc - user_online_at).total_seconds() <= 180:
+                    is_active = True
+
+            if is_active:
+                active_node_id = None
+                try:
+                    stmt = (
+                        select(NodeUserUsage.node_id)
+                        .where(NodeUserUsage.user_id == db_user.id, NodeUserUsage.node_id.isnot(None))
+                        .order_by(NodeUserUsage.created_at.desc())
+                        .limit(1)
+                    )
+                    res = await db.execute(stmt)
+                    active_node_id = res.scalar_one_or_none()
+                except Exception as e:
+                    logger.debug(f"Could not fetch recent NodeUserUsage for user {user_id}: {e}")
+
+                if not active_node_id and nodes:
+                    active_node_id = nodes[0][0]
+
+                if active_node_id:
+                    client_ip = None
+                    try:
+                        sub_stmt = (
+                            select(UserSubscriptionUpdate.ip)
+                            .where(
+                                UserSubscriptionUpdate.user_id == db_user.id,
+                                UserSubscriptionUpdate.ip.isnot(None),
+                            )
+                            .order_by(UserSubscriptionUpdate.created_at.desc())
+                            .limit(1)
+                        )
+                        sub_res = await db.execute(sub_stmt)
+                        client_ip = sub_res.scalar_one_or_none()
+                    except Exception as e:
+                        logger.debug(f"Could not fetch UserSubscriptionUpdate IP for user {user_id}: {e}")
+
+                    loopback_ips = {"127.0.0.1", "::1", "localhost"}
+                    if not client_ip or client_ip.lower() in loopback_ips:
+                        client_ip = "Active Connection"
+
+                    ts = int(user_online_at.timestamp())
+                    results[active_node_id] = UserIPList(ips={client_ip: ts})
 
         return UserIPListAll(nodes=results)
 

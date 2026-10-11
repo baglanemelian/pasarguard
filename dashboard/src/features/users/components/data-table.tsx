@@ -148,8 +148,16 @@ function useTableOverlayScrollbar() {
 }
 
 const ExpandedRowContent = memo(({ row }: { row: { original: UserResponse } }) => (
-  <div className="flex flex-col gap-y-4 border-b p-4">
-    <UsageSliderCompact isMobile status={row.original.status} total={row.original.data_limit} totalUsedTraffic={row.original.lifetime_used_traffic} used={row.original.used_traffic} />
+    <UsageSliderCompact
+      isMobile
+      status={row.original.status}
+      total={row.original.data_limit}
+      totalUsedTraffic={row.original.lifetime_used_traffic}
+      used={row.original.used_traffic}
+      userId={row.original.id}
+      uuidLimit={(row.original as any).uuid_limit}
+      lastOnline={row.original.online_at}
+    />
     <div className="flex flex-col gap-y-2">
       <div className="flex items-center justify-end">
         <div onClick={e => e.stopPropagation()}>

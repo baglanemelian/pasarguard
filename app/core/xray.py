@@ -39,6 +39,7 @@ class XRayConfig(dict):
             config = deepcopy(config)
 
         super().__init__(config)
+        self._ensure_stats_user_online()
 
         if exclude_inbound_tags is None:
             exclude_inbound_tags = set()
@@ -541,8 +542,30 @@ class XRayConfig(dict):
             if outbound["tag"] == tag:
                 return outbound
 
+    def _ensure_stats_user_online(self):
+        """Ensure policy levels have statsUserOnline and stats enabled for IP tracking."""
+        if "stats" not in self or not isinstance(self.get("stats"), dict):
+            self["stats"] = {}
+        if "policy" not in self or not isinstance(self.get("policy"), dict):
+            self["policy"] = {}
+        policy = self["policy"]
+        if "levels" not in policy or not isinstance(policy.get("levels"), dict):
+            policy["levels"] = {}
+        levels = policy["levels"]
+        if "0" not in levels or not isinstance(levels.get("0"), dict):
+            levels["0"] = {}
+        levels["0"]["statsUserOnline"] = True
+        levels["0"]["statsUserUplink"] = True
+        levels["0"]["statsUserDownlink"] = True
+        for lvl_val in levels.values():
+            if isinstance(lvl_val, dict):
+                lvl_val["statsUserOnline"] = True
+                lvl_val["statsUserUplink"] = True
+                lvl_val["statsUserDownlink"] = True
+
     def to_str(self, **json_kwargs) -> str:
         """Convert the config to a JSON string."""
+        self._ensure_stats_user_online()
         return json.dumps(self, **json_kwargs)
 
     @property

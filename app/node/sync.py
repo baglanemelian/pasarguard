@@ -172,3 +172,17 @@ async def sync_users(users: list[User]) -> None:
     filtered = [user for user in users if user.admin_id not in blocked_admin_ids]
     proto_users = await serialize_users_for_node(filtered)
     asyncio.create_task(_dispatch_users_update(proto_users))
+
+
+async def sever_user_connections(user: User) -> None:
+    """Sever all active sockets for a user by temporarily removing inbounds, then re-enabling."""
+    try:
+        proto_user_empty = _serialize_user_for_node(user.id, user.proxy_settings, inbounds=[])
+        await _dispatch_user_update(proto_user_empty)
+        await asyncio.sleep(1.5)
+        proto_user_valid = await serialize_user(user)
+        await _dispatch_user_update(proto_user_valid)
+        logger.info(f"Severed concurrent connections for user '{user.username}' (ID: {user.id})")
+    except Exception as e:
+        logger.error(f"Failed to sever connections for user '{user.username}': {e}")
+
